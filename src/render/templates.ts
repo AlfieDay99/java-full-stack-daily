@@ -11,10 +11,14 @@ export function renderHookCard(lesson: DailyLesson): string {
     cardNumber: "01",
     sectionLabel: categoryLabel(lesson.category),
     content: `
-      <div class="stack" style="gap:30px; padding-top:12px;">
+      <div class="stack hook-stack" style="gap:30px; padding-top:12px;">
         <h1 class="title-xl">${escapeHtml(lesson.hook.headline)}</h1>
         <div class="hero-token">${escapeHtml(lesson.hook.heroToken)}</div>
         <div class="hook-panel"><p class="body-lg">${escapeHtml(lesson.hook.hook)}</p></div>
+        <div class="micro-example">
+          <div class="panel-title">QUICK EXAMPLE</div>
+          <div class="micro-example-text">${escapeHtml(lesson.hook.microExample)}</div>
+        </div>
         <div class="panel info panel-pad">
           <div class="panel-title">WHY THIS MATTERS</div>
           <p class="caption">${escapeHtml(lesson.hook.visualCaption)}</p>
@@ -30,10 +34,10 @@ export function renderMentalModelCard(lesson: DailyLesson): string {
     cardNumber: "02",
     sectionLabel: "MENTAL MODEL",
     content: `
-      <div class="stack" style="gap:26px;">
+      <div class="stack mental-stack" style="gap:28px;">
         <h1 class="title-lg">${escapeHtml(lesson.mentalModel.title)}</h1>
         <p class="body-md">${escapeHtml(lesson.mentalModel.coreIdea)}</p>
-        <div class="panel flow-box info">
+        <div class="panel flow-box good">
           <div class="flow-label good">${escapeHtml(lesson.mentalModel.primaryLabel)}</div>
           ${flow(lesson.mentalModel.primaryFlow)}
         </div>
@@ -41,8 +45,12 @@ export function renderMentalModelCard(lesson: DailyLesson): string {
           <div class="flow-label warn">${escapeHtml(lesson.mentalModel.secondaryLabel)}</div>
           ${flow(lesson.mentalModel.secondaryFlow)}
         </div>
-        <div class="panel info panel-pad">
-          <div class="panel-title">MENTAL SHORTCUT</div>
+        <div class="key-outcome">
+          <div class="panel-title">KEY OUTCOME</div>
+          <p class="body-md">${escapeHtml(lesson.mentalModel.keyOutcome)}</p>
+        </div>
+        <div class="panel info panel-pad mental-shortcut">
+          <div class="panel-title">MENTAL MODEL</div>
           <p class="body-sm"><span class="accent-cyan mono">boundary → interception → behaviour</span></p>
         </div>
       </div>
@@ -56,7 +64,7 @@ export function renderCodeCard(lesson: DailyLesson): string {
     cardNumber: "03",
     sectionLabel: "SEE IT IN CODE",
     content: `
-      <div class="stack" style="gap:24px;">
+      <div class="stack code-stack" style="gap:24px;">
         <h1 class="title-lg">${escapeHtml(lesson.code.title)}</h1>
         <p class="body-md">${escapeHtml(lesson.code.intro)}</p>
         <div class="code-window">
@@ -66,6 +74,10 @@ export function renderCodeCard(lesson: DailyLesson): string {
         <div class="panel warn panel-pad">
           <div class="panel-title">HIGHLIGHT</div>
           <p class="body-sm">${escapeHtml(lesson.code.highlightReason)}</p>
+        </div>
+        <div class="panel info panel-pad">
+          <div class="panel-title">PROFESSIONAL NOTE</div>
+          <p class="body-sm">${escapeHtml(lesson.code.professionalNote)}</p>
         </div>
         <div class="panel good panel-pad">
           <div class="panel-title">TAKEAWAY</div>
@@ -92,7 +104,7 @@ export function renderProductionCard(lesson: DailyLesson): string {
     cardNumber: "04",
     sectionLabel: "PRODUCTION REALITY",
     content: `
-      <div class="stack" style="gap:23px;">
+      <div class="stack production-stack" style="gap:23px;">
         <h1 class="title-lg">${escapeHtml(lesson.production.title)}</h1>
         <div class="panel info panel-pad">
           <div class="panel-title">SCENARIO</div>
@@ -103,6 +115,10 @@ export function renderProductionCard(lesson: DailyLesson): string {
           ${flow(lesson.production.flow)}
         </div>
         <div class="problem-list">${problems}</div>
+        <div class="debug-clue">
+          <div class="panel-title">DEBUG CLUE</div>
+          <p class="body-sm">${escapeHtml(lesson.production.debugClue)}</p>
+        </div>
         <div class="panel good panel-pad">
           <div class="panel-title">PROFESSIONAL APPROACH</div>
           <p class="body-sm">${escapeHtml(lesson.production.professionalApproach)}</p>
@@ -124,7 +140,7 @@ export function renderInterviewCard(lesson: DailyLesson): string {
     cardNumber: "05",
     sectionLabel: "INTERVIEW + REMEMBER",
     content: `
-      <div class="stack" style="gap:24px;">
+      <div class="stack interview-stack" style="gap:24px;">
         <div class="panel interview panel-pad">
           <div class="panel-title">INTERVIEW CHECK</div>
           <h1 class="title-md">${escapeHtml(lesson.interview.question)}</h1>
@@ -132,6 +148,10 @@ export function renderInterviewCard(lesson: DailyLesson): string {
         <div class="panel info panel-pad">
           <div class="panel-title">STRONG ANSWER</div>
           <p class="body-md">${escapeHtml(lesson.interview.answer)}</p>
+        </div>
+        <div class="interviewer-testing">
+          <div class="panel-title">WHAT THEY'RE TESTING</div>
+          <p class="body-sm">${escapeHtml(lesson.interview.interviewerTesting)}</p>
         </div>
         <div class="panel interview panel-pad">
           <div class="panel-title">REMEMBER</div>

@@ -45,11 +45,11 @@ CONTENT RULES
 - Exactly ONE narrow main concept.
 - Technical correctness over catchy wording.
 - Keep each text field concise enough for a phone graphic.
-- Hook: sparse and attention-grabbing, not clickbait. heroToken should be a short technical token/phrase that can be rendered very large.
-- Mental model: explain what is actually happening. primaryFlow and secondaryFlow should each contain 2–6 short labels. Use secondaryFlow for a contrasting/bypass/bad path; if no contrast is useful, use a shorter related flow rather than prose.
-- Code: 3–10 lines whenever code genuinely helps. highlightLine is 1-based and must point to an existing code line. Use modern professional practices.
-- Production: exactly 1–2 important problems/gotchas. flow should contain 3–6 short steps showing the production path.
-- Interview: one realistic question, a natural 30–60 word answer, exactly 3 very short remember points, and a one-line tomorrow preview.
+- Hook: sparse and attention-grabbing, not clickbait. heroToken should be a short technical token/phrase that can be rendered very large. microExample should be one concrete, highly scannable example or contrast (roughly 8–18 words), ideally using arrows or before/after phrasing rather than prose.
+- Mental model: explain what is actually happening. primaryFlow and secondaryFlow should each contain 2–6 short labels. Use secondaryFlow for a contrasting/bypass/bad path; if no contrast is useful, use a shorter related flow rather than prose. keyOutcome should be one memorable 8–18 word sentence stating the practical result of the comparison.
+- Code: 3–10 lines whenever code genuinely helps. highlightLine is 1-based and must point to an existing code line. Use modern professional practices. professionalNote should be one 8–18 word production-oriented note that adds something beyond the takeaway.
+- Production: exactly 1–2 important problems/gotchas. flow should contain 3–6 short steps showing the production path. debugClue should be one concise symptom/log/test clue an engineer could use to recognise the issue.
+- Interview: one realistic question, a natural 30–60 word answer, exactly 3 very short remember points, a one-line tomorrow preview, and interviewerTesting: one concise sentence explaining what the interviewer is actually assessing.
 - Keep topic and tomorrowTopic narrow.
 - For Friday, use the same schema but make the cards feel like a progressive interview diagnosis.
 - For Sunday, use the same schema but make it a compact review anchored in recent topics.
