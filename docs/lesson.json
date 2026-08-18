@@ -1,65 +1,64 @@
 {
   "category": "Tuesday — Core Working Knowledge",
   "code": {
-    "code": "@Service\nclass OrderService {\n  public void placeOrder(Order order) {\n    this.saveOrder(order); // direct call: proxy is bypassed\n  }\n  @Transactional\n  public void saveOrder(Order order) {\n    repository.save(order);\n  }\n}",
-    "highlightLine": 4,
-    "highlightReason": "A call through this stays on the same object, so Spring's transactional proxy cannot intercept it.",
-    "intro": "@Transactional works at a Spring proxy boundary, not as a JVM-wide method feature.",
+    "code": "public record CreateUserRequest(\n    @NotBlank @Email String email,\n    @NotBlank String displayName\n) {}\n\n@PostMapping(\"/users\")\nResponseEntity<Void> create(@Valid @RequestBody CreateUserRequest request) {\n    userService.create(request);\n    return ResponseEntity.noContent().build();\n}",
+    "highlightLine": 7,
+    "highlightReason": "@Valid tells Spring MVC to validate the deserialised request DTO before the controller method runs.",
+    "intro": "Validation is not automatic merely because a DTO has constraints.",
     "language": "java",
-    "takeaway": "Put transactional entry points behind calls that cross a Spring-managed bean boundary.",
-    "title": "Self-invocation skips @Transactional"
+    "takeaway": "Put constraints on request DTOs and add @Valid at the HTTP boundary; invalid input should not reach service code.",
+    "title": "Bean Validation starts at @Valid"
   },
   "date": "2026-08-18",
   "hook": {
-    "headline": "The annotation is there. The transaction is not.",
-    "heroToken": "AOP PROXY",
-    "hook": "Spring can only apply transaction behaviour to calls it intercepts.",
-    "visualCaption": "A direct call on this never reaches the proxy."
+    "headline": "Constraints alone do nothing.",
+    "heroToken": "@Valid",
+    "hook": "Spring only runs request validation when the controller asks it to.",
+    "visualCaption": "Validate untrusted HTTP input before business logic."
   },
   "interview": {
-    "answer": "Spring usually implements @Transactional with an AOP proxy. A call arriving through the proxy starts or joins a transaction; the proxy then commits or rolls back. A this.method() call stays inside the target object, so the annotation on the called method is not intercepted. Move that boundary to another bean or redesign the entry point.",
-    "question": "Why can a method annotated with @Transactional run without a transaction when called from the same class?",
+    "answer": "Bean Validation constraints on a request DTO are metadata until Spring MVC is asked to apply them. Adding @Valid to an @RequestBody parameter validates the deserialised object before the controller body executes. Invalid input normally becomes a 400 response, which can be standardised with exception handling.",
+    "question": "Why can a Spring controller accept an invalid DTO even when its fields have @NotBlank or @Email?",
     "remember": [
-      "Proxy, not magic",
-      "this bypasses proxy",
-      "Use bean boundaries"
+      "Constraints need @Valid",
+      "Runs before method body",
+      "Keep rules on DTOs"
     ],
-    "tomorrow": "Spring transaction rollback rules for checked versus runtime exceptions"
+    "tomorrow": "Consistent Spring validation error responses with @ControllerAdvice"
   },
   "mentalModel": {
-    "coreIdea": "Transaction advice wraps an externally intercepted method call.",
+    "coreIdea": "A request DTO is populated first; validation is a separate, explicit step at the MVC boundary.",
     "primaryFlow": [
-      "Controller or service",
-      "Spring proxy",
-      "Transaction opens/joins",
-      "Target method",
-      "Commit or rollback"
+      "HTTP JSON",
+      "Jackson deserialises DTO",
+      "@Valid triggers validator",
+      "Controller method runs"
     ],
-    "primaryLabel": "Intercepted call",
+    "primaryLabel": "Validated request",
     "secondaryFlow": [
-      "Target method",
-      "this.otherMethod()",
-      "Same object",
-      "No new advice"
+      "HTTP JSON",
+      "Jackson deserialises DTO",
+      "No @Valid",
+      "Controller receives invalid DTO"
     ],
-    "secondaryLabel": "Self-invocation bypass",
-    "title": "Where transaction behaviour is applied"
+    "secondaryLabel": "Validation bypassed",
+    "title": "Deserialisation is not validation"
   },
   "production": {
     "flow": [
-      "Request enters service bean",
-      "Proxy resolves transaction settings",
-      "Business method writes data",
-      "Proxy commits or rolls back"
+      "Client sends malformed payload",
+      "MVC builds request DTO",
+      "Validator finds constraint violations",
+      "Return controlled 400 response"
     ],
     "problems": [
-      "REQUIRES_NEW, readOnly, or rollback settings can be silently ignored on self-invocation.",
-      "Objects created with new are not Spring-managed and are not transactional proxies."
+      "Forgetting @Valid silently lets bad data enter service and persistence layers.",
+      "Nested DTOs need @Valid on the nested field for cascaded validation."
     ],
-    "professionalApproach": "Keep transaction boundaries on public application-service methods. Extract genuinely separate transaction behaviour into another Spring bean rather than relying on self-calls.",
-    "scenario": "An order flow should save an audit record in REQUIRES_NEW, but the audit method is called with this.recordAudit(). The audit write unexpectedly rolls back with the order.",
-    "title": "Production signal: the “new” transaction never started"
+    "professionalApproach": "Validate transport-level shape and basic invariants at the API boundary; keep cross-record and business-state rules in the service layer.",
+    "scenario": "A client sends an empty display name and malformed email to a user-creation endpoint.",
+    "title": "Fail early at the API boundary"
   },
-  "tomorrowTopic": "Spring transaction rollback rules for checked versus runtime exceptions",
-  "topic": "Spring @Transactional self-invocation and proxy boundaries"
+  "tomorrowTopic": "Consistent Spring validation error responses with @ControllerAdvice",
+  "topic": "Spring MVC request DTO validation with @Valid"
 }

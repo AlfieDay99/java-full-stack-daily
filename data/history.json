@@ -1,7 +1,7 @@
 [
   {
     "date": "2026-08-18",
-    "topic": "Spring @Transactional self-invocation and proxy boundaries",
+    "topic": "Spring MVC request DTO validation with @Valid",
     "category": "Tuesday — Core Working Knowledge"
   }
 ]
