@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { LESSON_SCHEMA } from "./schema.js";
-import { buildPrompt } from "./prompt.js";
+import { buildPrompt, buildReviewPrompt } from "./prompt.js";
 import type { DailyLesson, HistoryEntry, WeekdayCategory } from "./types.js";
 
 function assertLesson(value: unknown): asserts value is DailyLesson {
@@ -8,6 +8,18 @@ function assertLesson(value: unknown): asserts value is DailyLesson {
   const lesson = value as Record<string, unknown>;
   for (const key of ["date", "topic", "tomorrowTopic", "category", "hook", "mentalModel", "code", "production", "interview"]) {
     if (!(key in lesson)) throw new Error(`Lesson is missing required field: ${key}`);
+  }
+
+  const mentalModel = lesson.mentalModel as {
+    primaryFlow?: unknown;
+    secondaryFlow?: unknown;
+    mentalShortcut?: unknown;
+  };
+  if (!Array.isArray(mentalModel.primaryFlow) || !Array.isArray(mentalModel.secondaryFlow)) {
+    throw new Error("Invalid mental-model flows returned by model.");
+  }
+  if (typeof mentalModel.mentalShortcut !== "string" || !mentalModel.mentalShortcut.trim()) {
+    throw new Error("Lesson is missing a topic-specific mentalShortcut.");
   }
 
   const code = lesson.code as { code?: unknown; highlightLine?: unknown };
@@ -18,37 +30,38 @@ function assertLesson(value: unknown): asserts value is DailyLesson {
   if (code.highlightLine < 1 || code.highlightLine > lineCount) {
     throw new Error(`highlightLine ${code.highlightLine} is outside code block (${lineCount} lines).`);
   }
-}
 
-export async function generateLesson(args: {
-  date: string;
-  category: WeekdayCategory;
-  recentHistory: HistoryEntry[];
-}): Promise<DailyLesson> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not set. Use npm run demo for a no-API preview.");
+  const production = lesson.production as { problems?: unknown; flow?: unknown };
+  if (!Array.isArray(production.problems) || production.problems.length < 1 || production.problems.length > 2) {
+    throw new Error("Production card must contain 1–2 problems.");
+  }
+  if (!Array.isArray(production.flow) || production.flow.length < 3) {
+    throw new Error("Production card must contain a meaningful runtime flow.");
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-5.6-terra";
-  const client = new OpenAI({ apiKey });
+  const interview = lesson.interview as { remember?: unknown };
+  if (!Array.isArray(interview.remember) || interview.remember.length !== 3) {
+    throw new Error("Interview card must contain exactly three remember points.");
+  }
+}
 
-  const completion = await client.chat.completions.create({
-    model,
+async function requestStructuredLesson(args: {
+  client: OpenAI;
+  model: string;
+  system: string;
+  user: string;
+  schemaName: string;
+}): Promise<DailyLesson> {
+  const completion = await args.client.chat.completions.create({
+    model: args.model,
     messages: [
-      {
-        role: "system",
-        content: "You are a precise senior Java Full Stack mentor and technical editor. Return structured lesson data only."
-      },
-      {
-        role: "user",
-        content: buildPrompt(args)
-      }
+      { role: "system", content: args.system },
+      { role: "user", content: args.user }
     ],
     response_format: {
       type: "json_schema",
       json_schema: {
-        name: "java_full_stack_daily_lesson",
+        name: args.schemaName,
         strict: true,
         schema: LESSON_SCHEMA
       }
@@ -62,18 +75,69 @@ export async function generateLesson(args: {
 
   const parsed: unknown = JSON.parse(message.content);
   assertLesson(parsed);
-
-  // The application owns today's date/category; do not let model drift override them.
-  parsed.date = args.date;
-  parsed.category = args.category;
-  parsed.interview.tomorrow = parsed.tomorrowTopic;
-
-  // Keep renderer assumptions deterministic.
-  parsed.mentalModel.primaryFlow = parsed.mentalModel.primaryFlow.slice(0, 6);
-  parsed.mentalModel.secondaryFlow = parsed.mentalModel.secondaryFlow.slice(0, 6);
-  parsed.production.problems = parsed.production.problems.slice(0, 2);
-  parsed.production.flow = parsed.production.flow.slice(0, 6);
-  parsed.interview.remember = parsed.interview.remember.slice(0, 3);
-
   return parsed;
+}
+
+function normaliseLesson(
+  lesson: DailyLesson,
+  args: { date: string; category: WeekdayCategory }
+): DailyLesson {
+  // The application owns today's date/category; do not let either model pass drift override them.
+  lesson.date = args.date;
+  lesson.category = args.category;
+  lesson.interview.tomorrow = lesson.tomorrowTopic;
+
+  // Keep renderer assumptions deterministic even if a future schema/model is more permissive.
+  lesson.mentalModel.primaryFlow = lesson.mentalModel.primaryFlow.slice(0, 6);
+  lesson.mentalModel.secondaryFlow = lesson.mentalModel.secondaryFlow.slice(0, 6);
+  lesson.production.problems = lesson.production.problems.slice(0, 2);
+  lesson.production.flow = lesson.production.flow.slice(0, 6);
+  lesson.interview.remember = lesson.interview.remember.slice(0, 3);
+
+  return lesson;
+}
+
+export async function generateLesson(args: {
+  date: string;
+  category: WeekdayCategory;
+  recentHistory: HistoryEntry[];
+}): Promise<DailyLesson> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not set. Use npm run demo for a no-API preview.");
+  }
+
+  const model = process.env.OPENAI_MODEL || "gpt-5.6-terra";
+  const reviewModel = process.env.OPENAI_REVIEW_MODEL || model;
+  const client = new OpenAI({ apiKey });
+
+  const draft = normaliseLesson(
+    await requestStructuredLesson({
+      client,
+      model,
+      schemaName: "java_full_stack_daily_draft",
+      system:
+        "You are a precise senior Java Full Stack mentor and curriculum editor. Accuracy is more important than brevity or punchiness. Return structured lesson data only.",
+      user: buildPrompt(args)
+    }),
+    args
+  );
+
+  // A second independent pass is mandatory: unreviewed model content is never published.
+  const reviewed = normaliseLesson(
+    await requestStructuredLesson({
+      client,
+      model: reviewModel,
+      schemaName: "java_full_stack_daily_reviewed_lesson",
+      system:
+        "You are a meticulous senior Java Full Stack technical reviewer. Correct misleading claims, framework/specification confusion, unsafe absolutes and code mistakes. Return the full corrected structured lesson only.",
+      user: buildReviewPrompt({ date: args.date, category: args.category, draft })
+    }),
+    args
+  );
+
+  // Re-validate the final reviewed content after normalisation. If review fails, fail the workflow
+  // rather than silently publishing the unreviewed draft.
+  assertLesson(reviewed);
+  return reviewed;
 }
