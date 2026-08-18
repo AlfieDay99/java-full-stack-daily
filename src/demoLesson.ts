@@ -4,60 +4,62 @@ export function demoLesson(date: string, category: WeekdayCategory): DailyLesson
   return {
     date,
     category,
-    topic: "Why Spring @Transactional self-invocation bypasses the proxy",
+    topic: "Why Spring @Transactional self-invocation bypasses proxy advice",
     tomorrowTopic: "How JPA N+1 queries arise",
     hook: {
-      headline: "@Transactional Can Be Silently Skipped",
-      hook: "Why can a method marked @Transactional run without the transaction you expected?",
+      headline: "@Transactional Can Be Silently Bypassed",
+      hook: "Why can a method marked @Transactional run without the transaction advice you expected?",
       heroToken: "@Transactional",
-      visualCaption: "The annotation is present. The proxy call is not.",
-      microExample: "external call → proxy → transaction   |   this.method() → direct call → no interception"
+      visualCaption: "In Spring's common proxy-based transaction mode, invocation path matters as much as the annotation.",
+      microExample: "external call → proxy advice   |   this.method() → direct self-call"
     },
     mentalModel: {
-      title: "The Proxy Is the Boundary",
+      title: "The Proxy Is the Interception Boundary",
       coreIdea:
-        "Spring commonly applies transactional advice through a proxy. External calls cross that boundary; a call through this stays inside the target object, so the interceptor never sees it.",
+        "In Spring's default proxy-based transaction management, external calls can pass through transactional advice. A self-call such as this.saveUsers() stays on the target object, so that inner invocation is not intercepted by the proxy.",
       primaryLabel: "EXTERNAL CALL — INTERCEPTED",
-      primaryFlow: ["Caller", "Spring proxy", "Begin transaction", "Service method", "Commit"],
+      primaryFlow: ["Caller", "Spring proxy", "TX advice", "Service method", "Commit"],
       secondaryLabel: "SELF CALL — BYPASS",
-      secondaryFlow: ["Service method", "this.saveUsers()", "No proxy", "No new advice"],
-      keyOutcome: "The annotation only takes effect when the invocation crosses the transactional proxy."
+      secondaryFlow: ["Service method", "this.saveUsers()", "Direct call", "No inner advice"],
+      keyOutcome: "Self-invocation bypasses proxy advice in the usual proxy-based Spring transaction mode.",
+      mentalShortcut: "external call → proxy → TX advice → method"
     },
     code: {
-      title: "The Annotation Is Not Enough",
-      intro: "This internal call never crosses the Spring proxy.",
+      title: "The Annotation Alone Is Not Enough",
+      intro: "The inner call below does not cross the transactional proxy.",
       language: "java",
       code: `public void importUsers() {\n    saveUsers();\n}\n\n@Transactional\npublic void saveUsers() {\n    repository.saveAll(users);\n}`,
       highlightLine: 2,
-      highlightReason: "saveUsers() is invoked directly on the same object, so proxy-based transactional advice is bypassed.",
-      takeaway: "Transactional behaviour depends on the invocation path, not only the annotation.",
-      professionalNote: "Put the transaction boundary around the externally invoked use case whenever possible."
+      highlightReason:
+        "saveUsers() is invoked directly from the same instance, so proxy-based transactional advice on that inner method is not applied.",
+      takeaway: "With proxy-based transactions, transactional advice depends on the invocation path as well as the annotation.",
+      professionalNote: "Prefer a clear transaction boundary on an externally invoked service use case."
     },
     production: {
       title: "A Dangerous False Assumption",
       scenario:
-        "A developer extracts database writes into a new @Transactional method on the same service and assumes failures will roll back the whole operation.",
+        "A developer extracts database writes into a new @Transactional method on the same service and assumes that annotation creates a separate transaction boundary when called internally.",
       problems: [
-        "The expected transaction may never start.",
-        "Persistence behaviour can differ from the intended atomic use case."
+        "The inner method's transactional advice is not applied through the proxy.",
+        "Rollback behaviour can therefore differ from what the developer intended."
       ],
       professionalApproach:
-        "Put the transaction boundary on the externally invoked service use case, or move a genuinely separate transactional operation to another Spring bean.",
-      flow: ["Controller", "Spring proxy", "@Transactional service", "Repositories", "One transaction"],
-      debugClue: "A rollback test fails even though the inner method is annotated @Transactional."
+        "Place the transaction boundary on the externally invoked service operation, or move a genuinely separate transactional operation to another Spring bean when that boundary is required.",
+      flow: ["Controller", "Spring proxy", "TX service", "Repositories", "One transaction"],
+      debugClue: "A rollback-focused integration test fails even though the internally called method is annotated @Transactional."
     },
     interview: {
       question:
-        "Why might @Transactional not work when one method in a Spring service calls another method in the same service?",
+        "Why might @Transactional not apply when one method in a Spring service calls another method in the same service?",
       answer:
-        "Spring commonly implements @Transactional with proxies. An external call passes through the proxy, which can start and manage the transaction. Self-invocation calls the target method directly, so the proxy does not intercept it. I normally put transaction boundaries around externally invoked service-level use cases.",
+        "Spring commonly applies @Transactional through a proxy. An external call can cross that proxy and trigger transaction advice, but self-invocation is a direct call on the target object, so the inner method is not intercepted. That caveat applies to the usual proxy-based mode; other weaving approaches can behave differently.",
       remember: [
-        "@Transactional is proxy-based by default",
-        "Self-invocation bypasses the proxy",
-        "Prefer clear service-level transaction boundaries"
+        "Proxy-based advice needs a proxy crossing",
+        "Self-invocation is a direct target call",
+        "Prefer explicit service transaction boundaries"
       ],
       tomorrow: "How JPA N+1 queries arise",
-      interviewerTesting: "Whether you understand Spring proxy mechanics, not merely the @Transactional annotation."
+      interviewerTesting: "Whether you understand Spring's transaction interception model rather than merely recognising the annotation."
     }
   };
 }
