@@ -25,6 +25,7 @@ export interface MentalModelCard {
   primaryLabel: string;
   secondaryLabel: string;
   keyOutcome: string;
+  mentalShortcut: string;
 }
 
 export interface CodeCard {
