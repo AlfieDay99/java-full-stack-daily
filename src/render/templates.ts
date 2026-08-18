@@ -51,7 +51,7 @@ export function renderMentalModelCard(lesson: DailyLesson): string {
         </div>
         <div class="panel info panel-pad mental-shortcut">
           <div class="panel-title">MENTAL MODEL</div>
-          <p class="body-sm"><span class="accent-cyan mono">boundary → interception → behaviour</span></p>
+          <p class="body-sm"><span class="accent-cyan mono">${escapeHtml(lesson.mentalModel.mentalShortcut)}</span></p>
         </div>
       </div>
       <div class="spacer"></div>`
