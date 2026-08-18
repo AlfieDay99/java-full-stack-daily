@@ -18,6 +18,12 @@ function assertLesson(value: unknown): asserts value is DailyLesson {
   if (!Array.isArray(mentalModel.primaryFlow) || !Array.isArray(mentalModel.secondaryFlow)) {
     throw new Error("Invalid mental-model flows returned by model.");
   }
+  if (mentalModel.primaryFlow.length < 2 || mentalModel.primaryFlow.length > 6) {
+    throw new Error("Primary mental-model flow must contain 2–6 steps.");
+  }
+  if (mentalModel.secondaryFlow.length < 2 || mentalModel.secondaryFlow.length > 6) {
+    throw new Error("Secondary mental-model flow must contain 2–6 steps.");
+  }
   if (typeof mentalModel.mentalShortcut !== "string" || !mentalModel.mentalShortcut.trim()) {
     throw new Error("Lesson is missing a topic-specific mentalShortcut.");
   }
@@ -35,8 +41,8 @@ function assertLesson(value: unknown): asserts value is DailyLesson {
   if (!Array.isArray(production.problems) || production.problems.length < 1 || production.problems.length > 2) {
     throw new Error("Production card must contain 1–2 problems.");
   }
-  if (!Array.isArray(production.flow) || production.flow.length < 3) {
-    throw new Error("Production card must contain a meaningful runtime flow.");
+  if (!Array.isArray(production.flow) || production.flow.length < 3 || production.flow.length > 6) {
+    throw new Error("Production card must contain a 3–6 step runtime flow.");
   }
 
   const interview = lesson.interview as { remember?: unknown };
@@ -108,7 +114,8 @@ export async function generateLesson(args: {
   }
 
   const model = process.env.OPENAI_MODEL || "gpt-5.6-terra";
-  const reviewModel = process.env.OPENAI_REVIEW_MODEL || model;
+  // Correctness matters more than cost for the final pass. OPENAI_REVIEW_MODEL can override this.
+  const reviewModel = process.env.OPENAI_REVIEW_MODEL || "gpt-5.6";
   const client = new OpenAI({ apiKey });
 
   const draft = normaliseLesson(
