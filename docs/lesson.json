@@ -1,64 +1,71 @@
 {
   "category": "Tuesday — Core Working Knowledge",
   "code": {
-    "code": "public record CreateUserRequest(\n    @NotBlank @Email String email,\n    @NotBlank String displayName\n) {}\n\n@PostMapping(\"/users\")\nResponseEntity<Void> create(@Valid @RequestBody CreateUserRequest request) {\n    userService.create(request);\n    return ResponseEntity.noContent().build();\n}",
-    "highlightLine": 7,
-    "highlightReason": "@Valid tells Spring MVC to validate the deserialised request DTO before the controller method runs.",
-    "intro": "Validation is not automatic merely because a DTO has constraints.",
+    "code": "@Transactional(readOnly = true)\npublic OrderResponse getOrder(UUID id) {\n  Order order = orders.findById(id).orElseThrow();\n  String customerName = order.getCustomer().getName();\n  return new OrderResponse(order.getId(), customerName);\n}",
+    "highlightLine": 4,
+    "highlightReason": "Accessing the lazy association here initialises it while the persistence context is active.",
+    "intro": "Map the response inside the transactional service boundary, not from a detached entity.",
     "language": "java",
-    "takeaway": "Put constraints on request DTOs and add @Valid at the HTTP boundary; invalid input should not reach service code.",
-    "title": "Bean Validation starts at @Valid"
+    "professionalNote": "Return DTOs deliberately; do not expose JPA entities as your API contract.",
+    "takeaway": "Lazy associations load on access only while Hibernate can still reach the persistence context.",
+    "title": "Initialise lazy data before leaving the service"
   },
   "date": "2026-08-18",
   "hook": {
-    "headline": "Constraints alone do nothing.",
-    "heroToken": "@Valid",
-    "hook": "Spring only runs request validation when the controller asks it to.",
-    "visualCaption": "Validate untrusted HTTP input before business logic."
+    "headline": "A relation can exist without its data being loaded.",
+    "heroToken": "LAZY ≠ LOADED",
+    "hook": "Hibernate often gives you a proxy first, then fetches only when you access it.",
+    "microExample": "Service access → loaded DTO; controller serialisation → detached proxy failure.",
+    "visualCaption": "A lazy association is a deferred database lookup, not a populated field."
   },
   "interview": {
-    "answer": "Bean Validation constraints on a request DTO are metadata until Spring MVC is asked to apply them. Adding @Valid to an @RequestBody parameter validates the deserialised object before the controller body executes. Invalid input normally becomes a 400 response, which can be standardised with exception handling.",
-    "question": "Why can a Spring controller accept an invalid DTO even when its fields have @NotBlank or @Email?",
+    "answer": "A lazy association is represented by a proxy or persistent collection until code accesses it. That access needs an active Hibernate persistence context, usually inside a transaction. I map required fields to a DTO in the service layer and choose a fetch join or entity graph when the response needs related data.",
+    "interviewerTesting": "Whether you understand ORM lifecycle boundaries rather than just memorising the exception.",
+    "question": "Why can a Spring endpoint throw LazyInitializationException even though the repository call succeeded?",
     "remember": [
-      "Constraints need @Valid",
-      "Runs before method body",
-      "Keep rules on DTOs"
+      "Lazy is deferred",
+      "Transactions define access",
+      "DTOs cross boundaries"
     ],
-    "tomorrow": "Consistent Spring validation error responses with @ControllerAdvice"
+    "tomorrow": "JPA fetch joins versus entity graphs for read endpoints"
   },
   "mentalModel": {
-    "coreIdea": "A request DTO is populated first; validation is a separate, explicit step at the MVC boundary.",
+    "coreIdea": "`LAZY` tells Hibernate to defer an association query until the association is accessed. The proxy needs the persistence context that created it.",
+    "keyOutcome": "Load exactly the required graph before your entity crosses the transaction boundary.",
     "primaryFlow": [
-      "HTTP JSON",
-      "Jackson deserialises DTO",
-      "@Valid triggers validator",
-      "Controller method runs"
+      "HTTP request",
+      "transactional service",
+      "entity and proxy",
+      "association accessed",
+      "DTO returned"
     ],
-    "primaryLabel": "Validated request",
+    "primaryLabel": "Safe path",
     "secondaryFlow": [
-      "HTTP JSON",
-      "Jackson deserialises DTO",
-      "No @Valid",
-      "Controller receives invalid DTO"
+      "repository returns entity",
+      "transaction ends",
+      "JSON serialiser accesses proxy",
+      "LazyInitializationException"
     ],
-    "secondaryLabel": "Validation bypassed",
-    "title": "Deserialisation is not validation"
+    "secondaryLabel": "Detached path",
+    "title": "A proxy needs an open persistence context"
   },
   "production": {
+    "debugClue": "Endpoint fails during JSON writing with `could not initialize proxy - no Session`.",
     "flow": [
-      "Client sends malformed payload",
-      "MVC builds request DTO",
-      "Validator finds constraint violations",
-      "Return controlled 400 response"
+      "Controller calls service",
+      "Service loads order",
+      "Service maps required fields",
+      "Transaction closes",
+      "Controller returns DTO"
     ],
     "problems": [
-      "Forgetting @Valid silently lets bad data enter service and persistence layers.",
-      "Nested DTOs need @Valid on the nested field for cascaded validation."
+      "Returning entities lets Jackson trigger unexpected lazy loads or failures.",
+      "Open Session in View can hide failures while causing late, uncontrolled queries."
     ],
-    "professionalApproach": "Validate transport-level shape and basic invariants at the API boundary; keep cross-record and business-state rules in the service layer.",
-    "scenario": "A client sends an empty display name and malformed email to a user-creation endpoint.",
-    "title": "Fail early at the API boundary"
+    "professionalApproach": "Define response DTOs and fetch the required graph intentionally at the query boundary.",
+    "scenario": "An order endpoint returns its customer name, but `customer` is mapped `LAZY`.",
+    "title": "Avoid serialisation-driven database access"
   },
-  "tomorrowTopic": "Consistent Spring validation error responses with @ControllerAdvice",
-  "topic": "Spring MVC request DTO validation with @Valid"
+  "tomorrowTopic": "JPA fetch joins versus entity graphs for read endpoints",
+  "topic": "JPA lazy associations and transactional persistence-context boundaries"
 }

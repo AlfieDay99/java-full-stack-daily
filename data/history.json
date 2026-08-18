@@ -1,7 +1,7 @@
 [
   {
     "date": "2026-08-18",
-    "topic": "Spring MVC request DTO validation with @Valid",
+    "topic": "JPA lazy associations and transactional persistence-context boundaries",
     "category": "Tuesday — Core Working Knowledge"
   }
 ]
