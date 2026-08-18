@@ -24,9 +24,10 @@ export const LESSON_SCHEMA = {
         headline: { type: "string" },
         hook: { type: "string" },
         heroToken: { type: "string" },
-        visualCaption: { type: "string" }
+        visualCaption: { type: "string" },
+        microExample: { type: "string" }
       },
-      required: ["headline", "hook", "heroToken", "visualCaption"]
+      required: ["headline", "hook", "heroToken", "visualCaption", "microExample"]
     },
     mentalModel: {
       type: "object",
@@ -37,7 +38,8 @@ export const LESSON_SCHEMA = {
         primaryFlow: { type: "array", items: { type: "string" } },
         secondaryFlow: { type: "array", items: { type: "string" } },
         primaryLabel: { type: "string" },
-        secondaryLabel: { type: "string" }
+        secondaryLabel: { type: "string" },
+        keyOutcome: { type: "string" }
       },
       required: [
         "title",
@@ -45,7 +47,8 @@ export const LESSON_SCHEMA = {
         "primaryFlow",
         "secondaryFlow",
         "primaryLabel",
-        "secondaryLabel"
+        "secondaryLabel",
+        "keyOutcome"
       ]
     },
     code: {
@@ -61,7 +64,8 @@ export const LESSON_SCHEMA = {
         code: { type: "string" },
         highlightLine: { type: "integer" },
         highlightReason: { type: "string" },
-        takeaway: { type: "string" }
+        takeaway: { type: "string" },
+        professionalNote: { type: "string" }
       },
       required: [
         "title",
@@ -70,7 +74,8 @@ export const LESSON_SCHEMA = {
         "code",
         "highlightLine",
         "highlightReason",
-        "takeaway"
+        "takeaway",
+        "professionalNote"
       ]
     },
     production: {
@@ -81,9 +86,10 @@ export const LESSON_SCHEMA = {
         scenario: { type: "string" },
         problems: { type: "array", items: { type: "string" } },
         professionalApproach: { type: "string" },
-        flow: { type: "array", items: { type: "string" } }
+        flow: { type: "array", items: { type: "string" } },
+        debugClue: { type: "string" }
       },
-      required: ["title", "scenario", "problems", "professionalApproach", "flow"]
+      required: ["title", "scenario", "problems", "professionalApproach", "flow", "debugClue"]
     },
     interview: {
       type: "object",
@@ -92,9 +98,10 @@ export const LESSON_SCHEMA = {
         question: { type: "string" },
         answer: { type: "string" },
         remember: { type: "array", items: { type: "string" } },
-        tomorrow: { type: "string" }
+        tomorrow: { type: "string" },
+        interviewerTesting: { type: "string" }
       },
-      required: ["question", "answer", "remember", "tomorrow"]
+      required: ["question", "answer", "remember", "tomorrow", "interviewerTesting"]
     }
   },
   required: [
