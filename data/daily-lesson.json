@@ -1,0 +1,71 @@
+{
+  "date": "2026-08-18",
+  "topic": "PostgreSQL Read Committed statement snapshots",
+  "tomorrowTopic": "Diagnosing PostgreSQL lock waits with pg_stat_activity and pg_locks",
+  "category": "Tuesday — Core Working Knowledge",
+  "hook": {
+    "headline": "One transaction can see two committed realities",
+    "hook": "Under PostgreSQL Read Committed, each statement gets its own snapshot, so later queries can observe newly committed concurrent changes.",
+    "heroToken": "snapshot / statement",
+    "visualCaption": "A transaction boundary does not imply one fixed read snapshot at Read Committed.",
+    "microExample": "SELECT #1 → concurrent COMMIT → SELECT #2 may see newer data"
+  },
+  "mentalModel": {
+    "title": "Snapshots are statement-scoped",
+    "coreIdea": "PostgreSQL Read Committed gives each ordinary SELECT a snapshot taken when that query begins. A later SELECT in the same transaction gets a new snapshot, so commits completed in between can become visible without exposing uncommitted data.",
+    "primaryFlow": [
+      "BEGIN",
+      "SELECT #1",
+      "concurrent COMMIT",
+      "SELECT #2"
+    ],
+    "secondaryFlow": [
+      "first query",
+      "transaction snapshot",
+      "later query",
+      "same snapshot"
+    ],
+    "primaryLabel": "Read Committed",
+    "secondaryLabel": "Repeatable Read",
+    "keyOutcome": "Successive reads can differ because visibility is recalculated from a new committed snapshot.",
+    "mentalShortcut": "statement → snapshot → visible commits → next statement"
+  },
+  "code": {
+    "title": "Two reads, two snapshots",
+    "intro": "The transaction stays open, but Read Committed does not freeze one snapshot for every query.",
+    "language": "sql",
+    "code": "BEGIN;\nSET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSELECT status FROM orders WHERE id = 42;\n-- another transaction commits an update here\nSELECT status FROM orders WHERE id = 42;\nCOMMIT;",
+    "highlightLine": 5,
+    "highlightReason": "The second SELECT receives a new statement snapshot, so it can observe a concurrent change committed after the first SELECT began.",
+    "takeaway": "Transaction scope and snapshot scope are different concepts at PostgreSQL Read Committed.",
+    "professionalNote": "The second result can differ; it is not a dirty read because the observed change was committed."
+  },
+  "production": {
+    "title": "When this surprises services",
+    "scenario": "A service reads an order, performs more work, then reads it again in the same transaction and sees a newer status committed by another request.",
+    "problems": [
+      "Assuming BEGIN freezes one database view.",
+      "Making multi-step decisions from reads that may observe different committed states."
+    ],
+    "professionalApproach": "If a workflow requires a stable view across multiple queries, choose an isolation strategy that provides it, such as PostgreSQL Repeatable Read, and account for concurrent-write conflicts where relevant.",
+    "flow": [
+      "transaction starts",
+      "SELECT A",
+      "other commit",
+      "SELECT B",
+      "new value visible"
+    ],
+    "debugClue": "Two SELECTs in one transaction return different committed values without any rollback or dirty read."
+  },
+  "interview": {
+    "question": "A PostgreSQL transaction reads the same row twice and gets different values. No dirty read occurred. How is that possible?",
+    "answer": "At PostgreSQL Read Committed, each SELECT uses a snapshot taken when that statement begins. If another transaction commits an update between the two reads, the second SELECT can see it. That is still Read Committed, not a dirty read. For a stable transaction-wide snapshot, consider Repeatable Read and its concurrency implications.",
+    "remember": [
+      "Snapshot per statement",
+      "No dirty reads",
+      "Repeatable Read differs"
+    ],
+    "tomorrow": "Diagnosing PostgreSQL lock waits with pg_stat_activity and pg_locks",
+    "interviewerTesting": "Whether you distinguish transaction boundaries from snapshot visibility and can reason about concurrent committed changes."
+  }
+}
