@@ -14,6 +14,7 @@ export interface HookCard {
   hook: string;
   heroToken: string;
   visualCaption: string;
+  microExample: string;
 }
 
 export interface MentalModelCard {
@@ -23,6 +24,7 @@ export interface MentalModelCard {
   secondaryFlow: string[];
   primaryLabel: string;
   secondaryLabel: string;
+  keyOutcome: string;
 }
 
 export interface CodeCard {
@@ -33,6 +35,7 @@ export interface CodeCard {
   highlightLine: number;
   highlightReason: string;
   takeaway: string;
+  professionalNote: string;
 }
 
 export interface ProductionCard {
@@ -41,6 +44,7 @@ export interface ProductionCard {
   problems: string[];
   professionalApproach: string;
   flow: string[];
+  debugClue: string;
 }
 
 export interface InterviewCard {
@@ -48,6 +52,7 @@ export interface InterviewCard {
   answer: string;
   remember: string[];
   tomorrow: string;
+  interviewerTesting: string;
 }
 
 export interface DailyLesson {
