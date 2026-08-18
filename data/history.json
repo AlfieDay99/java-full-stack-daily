@@ -1,7 +1,7 @@
 [
   {
     "date": "2026-08-18",
-    "topic": "JPA lazy associations and transactional persistence-context boundaries",
+    "topic": "PostgreSQL Read Committed statement snapshots",
     "category": "Tuesday — Core Working Knowledge"
   }
 ]
