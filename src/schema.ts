@@ -39,7 +39,8 @@ export const LESSON_SCHEMA = {
         secondaryFlow: { type: "array", items: { type: "string" } },
         primaryLabel: { type: "string" },
         secondaryLabel: { type: "string" },
-        keyOutcome: { type: "string" }
+        keyOutcome: { type: "string" },
+        mentalShortcut: { type: "string" }
       },
       required: [
         "title",
@@ -48,7 +49,8 @@ export const LESSON_SCHEMA = {
         "secondaryFlow",
         "primaryLabel",
         "secondaryLabel",
-        "keyOutcome"
+        "keyOutcome",
+        "mentalShortcut"
       ]
     },
     code: {

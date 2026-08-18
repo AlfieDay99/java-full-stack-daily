@@ -6,6 +6,7 @@
   "scripts": {
     "generate": "tsx src/main.ts",
     "demo": "tsx src/main.ts --demo",
+    "render:scheduled": "tsx src/renderScheduledLesson.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

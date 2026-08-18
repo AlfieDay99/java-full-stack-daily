@@ -1,11 +1,13 @@
-name: Generate daily lesson
+name: Render scheduled lesson
 
 on:
   workflow_dispatch:
 
-  schedule:
-    - cron: "30 5 * * *"
-      timezone: "Europe/London"
+  push:
+    branches:
+      - main
+    paths:
+      - "data/daily-lesson.json"
 
 permissions:
   contents: write
@@ -14,16 +16,18 @@ permissions:
 
 concurrency:
   group: java-full-stack-daily
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-  generate:
+  render:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -33,27 +37,40 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Type-check renderer
+        run: npm run typecheck
+
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
 
-      - name: Generate lesson and cards
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: gpt-5.6-terra
-        run: npm run generate
+      - name: Render scheduled ChatGPT lesson
+        run: npm run render:scheduled
 
-      - name: Commit generated lesson
+      - name: Preserve generated site for deployment
+        run: |
+          rm -rf "$RUNNER_TEMP/generated-site"
+          mkdir -p "$RUNNER_TEMP/generated-site"
+          cp -R docs/. "$RUNNER_TEMP/generated-site/"
+
+          # The generated PNGs/site are deployment output, not repository history.
+          # Restore tracked docs and remove generated untracked files before committing history.
+          git restore docs
+          git clean -fd docs
+
+      - name: Persist lesson history
         run: |
           git config user.name "java-full-stack-daily[bot]"
           git config user.email "java-full-stack-daily[bot]@users.noreply.github.com"
 
-          git add docs data/history.json
+          git add data/history.json
 
           if git diff --cached --quiet; then
-            echo "No generated changes to commit."
+            echo "No history changes to commit."
           else
-            git commit -m "chore: generate daily lesson $(date -u +%F)"
-            git push
+            git commit -m "chore: record lesson $(date -u +%F)"
+            git fetch origin main
+            git rebase origin/main
+            git push origin HEAD:main
           fi
 
       - name: Configure GitHub Pages
@@ -62,10 +79,10 @@ jobs:
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: ./docs
+          path: ${{ runner.temp }}/generated-site
 
   deploy:
-    needs: generate
+    needs: render
     runs-on: ubuntu-latest
 
     environment:
