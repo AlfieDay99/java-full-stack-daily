@@ -1,0 +1,65 @@
+{
+  "category": "Tuesday — Core Working Knowledge",
+  "code": {
+    "code": "@Service\nclass OrderService {\n  public void placeOrder(Order order) {\n    this.saveOrder(order); // direct call: proxy is bypassed\n  }\n  @Transactional\n  public void saveOrder(Order order) {\n    repository.save(order);\n  }\n}",
+    "highlightLine": 4,
+    "highlightReason": "A call through this stays on the same object, so Spring's transactional proxy cannot intercept it.",
+    "intro": "@Transactional works at a Spring proxy boundary, not as a JVM-wide method feature.",
+    "language": "java",
+    "takeaway": "Put transactional entry points behind calls that cross a Spring-managed bean boundary.",
+    "title": "Self-invocation skips @Transactional"
+  },
+  "date": "2026-08-18",
+  "hook": {
+    "headline": "The annotation is there. The transaction is not.",
+    "heroToken": "AOP PROXY",
+    "hook": "Spring can only apply transaction behaviour to calls it intercepts.",
+    "visualCaption": "A direct call on this never reaches the proxy."
+  },
+  "interview": {
+    "answer": "Spring usually implements @Transactional with an AOP proxy. A call arriving through the proxy starts or joins a transaction; the proxy then commits or rolls back. A this.method() call stays inside the target object, so the annotation on the called method is not intercepted. Move that boundary to another bean or redesign the entry point.",
+    "question": "Why can a method annotated with @Transactional run without a transaction when called from the same class?",
+    "remember": [
+      "Proxy, not magic",
+      "this bypasses proxy",
+      "Use bean boundaries"
+    ],
+    "tomorrow": "Spring transaction rollback rules for checked versus runtime exceptions"
+  },
+  "mentalModel": {
+    "coreIdea": "Transaction advice wraps an externally intercepted method call.",
+    "primaryFlow": [
+      "Controller or service",
+      "Spring proxy",
+      "Transaction opens/joins",
+      "Target method",
+      "Commit or rollback"
+    ],
+    "primaryLabel": "Intercepted call",
+    "secondaryFlow": [
+      "Target method",
+      "this.otherMethod()",
+      "Same object",
+      "No new advice"
+    ],
+    "secondaryLabel": "Self-invocation bypass",
+    "title": "Where transaction behaviour is applied"
+  },
+  "production": {
+    "flow": [
+      "Request enters service bean",
+      "Proxy resolves transaction settings",
+      "Business method writes data",
+      "Proxy commits or rolls back"
+    ],
+    "problems": [
+      "REQUIRES_NEW, readOnly, or rollback settings can be silently ignored on self-invocation.",
+      "Objects created with new are not Spring-managed and are not transactional proxies."
+    ],
+    "professionalApproach": "Keep transaction boundaries on public application-service methods. Extract genuinely separate transaction behaviour into another Spring bean rather than relying on self-calls.",
+    "scenario": "An order flow should save an audit record in REQUIRES_NEW, but the audit method is called with this.recordAudit(). The audit write unexpectedly rolls back with the order.",
+    "title": "Production signal: the “new” transaction never started"
+  },
+  "tomorrowTopic": "Spring transaction rollback rules for checked versus runtime exceptions",
+  "topic": "Spring @Transactional self-invocation and proxy boundaries"
+}
