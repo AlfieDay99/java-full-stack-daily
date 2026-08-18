@@ -81,9 +81,11 @@ function parseLesson(value: unknown): DailyLesson {
   const language = requireString(code, "language", "code.language");
   if (!CODE_LANGUAGES.includes(language as CodeLanguage)) throw new Error(`Unsupported code language: ${language}`);
   const highlightLine = code.highlightLine;
-  if (!Number.isInteger(highlightLine)) throw new Error("code.highlightLine must be an integer.");
+  if (typeof highlightLine !== "number" || !Number.isInteger(highlightLine)) {
+    throw new Error("code.highlightLine must be an integer.");
+  }
   const lineCount = (code.code as string).split("\n").length;
-  if ((highlightLine as number) < 1 || (highlightLine as number) > lineCount) {
+  if (highlightLine < 1 || highlightLine > lineCount) {
     throw new Error(`code.highlightLine ${highlightLine} is outside the ${lineCount}-line code block.`);
   }
 
