@@ -35,11 +35,12 @@ export const LESSON_SCHEMA = {
       properties: {
         title: { type: "string" },
         coreIdea: { type: "string" },
-        primaryFlow: { type: "array", items: { type: "string" } },
-        secondaryFlow: { type: "array", items: { type: "string" } },
+        primaryFlow: { type: "array", minItems: 2, maxItems: 6, items: { type: "string" } },
+        secondaryFlow: { type: "array", minItems: 2, maxItems: 6, items: { type: "string" } },
         primaryLabel: { type: "string" },
         secondaryLabel: { type: "string" },
-        keyOutcome: { type: "string" }
+        keyOutcome: { type: "string" },
+        mentalShortcut: { type: "string" }
       },
       required: [
         "title",
@@ -48,7 +49,8 @@ export const LESSON_SCHEMA = {
         "secondaryFlow",
         "primaryLabel",
         "secondaryLabel",
-        "keyOutcome"
+        "keyOutcome",
+        "mentalShortcut"
       ]
     },
     code: {
@@ -84,9 +86,9 @@ export const LESSON_SCHEMA = {
       properties: {
         title: { type: "string" },
         scenario: { type: "string" },
-        problems: { type: "array", items: { type: "string" } },
+        problems: { type: "array", minItems: 1, maxItems: 2, items: { type: "string" } },
         professionalApproach: { type: "string" },
-        flow: { type: "array", items: { type: "string" } },
+        flow: { type: "array", minItems: 3, maxItems: 6, items: { type: "string" } },
         debugClue: { type: "string" }
       },
       required: ["title", "scenario", "problems", "professionalApproach", "flow", "debugClue"]
@@ -97,7 +99,7 @@ export const LESSON_SCHEMA = {
       properties: {
         question: { type: "string" },
         answer: { type: "string" },
-        remember: { type: "array", items: { type: "string" } },
+        remember: { type: "array", minItems: 3, maxItems: 3, items: { type: "string" } },
         tomorrow: { type: "string" },
         interviewerTesting: { type: "string" }
       },
