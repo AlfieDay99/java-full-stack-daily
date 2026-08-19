@@ -1,71 +1,71 @@
 {
-  "date": "2026-08-18",
-  "topic": "PostgreSQL Read Committed statement snapshots",
-  "tomorrowTopic": "Diagnosing PostgreSQL lock waits with pg_stat_activity and pg_locks",
-  "category": "Tuesday — Core Working Knowledge",
+  "date": "2026-08-19",
+  "topic": "Diagnosing PostgreSQL lock waits with pg_stat_activity and pg_blocking_pids",
+  "tomorrowTopic": "Choosing optimistic versus pessimistic locking for concurrent updates",
+  "category": "Wednesday — Professional Engineering",
   "hook": {
-    "headline": "One transaction can see two committed realities",
-    "hook": "Under PostgreSQL Read Committed, each statement gets its own snapshot, so later queries can observe newly committed concurrent changes.",
-    "heroToken": "snapshot / statement",
-    "visualCaption": "A transaction boundary does not imply one fixed read snapshot at Read Committed.",
-    "microExample": "SELECT #1 → concurrent COMMIT → SELECT #2 may see newer data"
+    "headline": "Slow SQL may be waiting, not working",
+    "hook": "A PostgreSQL query can look slow because it is blocked on a lock, even when its execution plan is perfectly reasonable.",
+    "heroToken": "wait → blocker",
+    "visualCaption": "Start with the waiting backend, then identify the session preventing its lock acquisition.",
+    "microExample": "active + Lock wait → blocking PID → blocker transaction"
   },
   "mentalModel": {
-    "title": "Snapshots are statement-scoped",
-    "coreIdea": "PostgreSQL Read Committed gives each ordinary SELECT a snapshot taken when that query begins. A later SELECT in the same transaction gets a new snapshot, so commits completed in between can become visible without exposing uncommitted data.",
+    "title": "Trace the wait chain",
+    "coreIdea": "pg_stat_activity shows whether an active backend is waiting and classifies the wait. When wait_event_type is Lock, pg_blocking_pids(pid) identifies sessions currently blocking that backend from acquiring its requested lock.",
     "primaryFlow": [
-      "BEGIN",
-      "SELECT #1",
-      "concurrent COMMIT",
-      "SELECT #2"
+      "slow request",
+      "backend PID",
+      "Lock wait",
+      "blocking PID"
     ],
     "secondaryFlow": [
-      "first query",
-      "transaction snapshot",
-      "later query",
-      "same snapshot"
+      "blocking PID",
+      "session details",
+      "transaction age",
+      "root cause"
     ],
-    "primaryLabel": "Read Committed",
-    "secondaryLabel": "Repeatable Read",
-    "keyOutcome": "Successive reads can differ because visibility is recalculated from a new committed snapshot.",
-    "mentalShortcut": "statement → snapshot → visible commits → next statement"
+    "primaryLabel": "Detect",
+    "secondaryLabel": "Investigate",
+    "keyOutcome": "You separate lock contention from queries that are actually consuming execution time.",
+    "mentalShortcut": "backend → wait type → blocker PID → transaction"
   },
   "code": {
-    "title": "Two reads, two snapshots",
-    "intro": "The transaction stays open, but Read Committed does not freeze one snapshot for every query.",
+    "title": "Find blocked sessions",
+    "intro": "Inspect active lock waits and ask PostgreSQL which sessions are blocking each backend.",
     "language": "sql",
-    "code": "BEGIN;\nSET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSELECT status FROM orders WHERE id = 42;\n-- another transaction commits an update here\nSELECT status FROM orders WHERE id = 42;\nCOMMIT;",
-    "highlightLine": 5,
-    "highlightReason": "The second SELECT receives a new statement snapshot, so it can observe a concurrent change committed after the first SELECT began.",
-    "takeaway": "Transaction scope and snapshot scope are different concepts at PostgreSQL Read Committed.",
-    "professionalNote": "The second result can differ; it is not a dirty read because the observed change was committed."
+    "code": "SELECT pid, query, wait_event,\n       pg_blocking_pids(pid) AS blockers\nFROM pg_stat_activity\nWHERE state = 'active'\n  AND wait_event_type = 'Lock';",
+    "highlightLine": 2,
+    "highlightReason": "pg_blocking_pids maps the waiting backend to sessions that currently prevent its requested lock from being acquired.",
+    "takeaway": "A blocker relationship is stronger evidence than assuming every long-running query is computationally expensive.",
+    "professionalNote": "Use pg_locks when you need lower-level detail about held and requested lock objects and modes."
   },
   "production": {
-    "title": "When this surprises services",
-    "scenario": "A service reads an order, performs more work, then reads it again in the same transaction and sees a newer status committed by another request.",
+    "title": "The hidden long transaction",
+    "scenario": "An API update exceeds its latency target. The SQL is indexed, but pg_stat_activity shows the backend active with wait_event_type = Lock while another transaction remains open.",
     "problems": [
-      "Assuming BEGIN freezes one database view.",
-      "Making multi-step decisions from reads that may observe different committed states."
+      "Tuning the blocked query plan does not remove the lock wait.",
+      "A long or idle-in-transaction blocker can extend contention across unrelated requests."
     ],
-    "professionalApproach": "If a workflow requires a stable view across multiple queries, choose an isolation strategy that provides it, such as PostgreSQL Repeatable Read, and account for concurrent-write conflicts where relevant.",
+    "professionalApproach": "Identify the waiting PID, resolve its blocking PIDs, then inspect blocker state, query and transaction age. Fix the transaction lifecycle or concurrency pattern rather than treating lock contention as generic slow SQL.",
     "flow": [
-      "transaction starts",
-      "SELECT A",
-      "other commit",
-      "SELECT B",
-      "new value visible"
+      "latency spike",
+      "Lock wait",
+      "blocking PID",
+      "open transaction",
+      "fix lifecycle"
     ],
-    "debugClue": "Two SELECTs in one transaction return different committed values without any rollback or dirty read."
+    "debugClue": "The backend is active with wait_event_type = Lock, and pg_blocking_pids returns one or more PIDs."
   },
   "interview": {
-    "question": "A PostgreSQL transaction reads the same row twice and gets different values. No dirty read occurred. How is that possible?",
-    "answer": "At PostgreSQL Read Committed, each SELECT uses a snapshot taken when that statement begins. If another transaction commits an update between the two reads, the second SELECT can see it. That is still Read Committed, not a dirty read. For a stable transaction-wide snapshot, consider Repeatable Read and its concurrency implications.",
+    "question": "A PostgreSQL UPDATE suddenly takes seconds, but EXPLAIN shows a sensible indexed plan. How would you investigate lock contention?",
+    "answer": "I would check pg_stat_activity to see whether the backend is active but waiting, especially with wait_event_type = Lock. Then I would use pg_blocking_pids(pid) to identify blockers and inspect those sessions and transaction ages. If deeper lock-object detail is needed, I would inspect pg_locks before changing query or transaction design.",
     "remember": [
-      "Snapshot per statement",
-      "No dirty reads",
-      "Repeatable Read differs"
+      "Check wait type",
+      "Find blocking PIDs",
+      "Inspect transactions"
     ],
-    "tomorrow": "Diagnosing PostgreSQL lock waits with pg_stat_activity and pg_locks",
-    "interviewerTesting": "Whether you distinguish transaction boundaries from snapshot visibility and can reason about concurrent committed changes."
+    "tomorrow": "Choosing optimistic versus pessimistic locking for concurrent updates",
+    "interviewerTesting": "Whether you diagnose database latency from runtime evidence and distinguish lock waits from expensive execution."
   }
 }
