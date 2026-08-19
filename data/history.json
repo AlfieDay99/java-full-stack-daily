@@ -3,5 +3,10 @@
     "date": "2026-08-18",
     "topic": "PostgreSQL Read Committed statement snapshots",
     "category": "Tuesday — Core Working Knowledge"
+  },
+  {
+    "date": "2026-08-19",
+    "topic": "Diagnosing PostgreSQL lock waits with pg_stat_activity and pg_blocking_pids",
+    "category": "Wednesday — Professional Engineering"
   }
 ]
