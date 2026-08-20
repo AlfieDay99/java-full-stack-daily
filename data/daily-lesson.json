@@ -55,7 +55,7 @@
       "estimate lock time",
       "choose strategy"
     ],
-    "debugClue": "Frequent optimistic-lock failures on one record indicate contention; long lock waits after switching indicate the opposite cost has surfaced.",
+    "debugClue": "Frequent optimistic-lock failures on one record indicate contention; long lock waits after switching indicate the opposite cost has surfaced."
   },
   "interview": {
     "question": "When would you choose optimistic locking over pessimistic locking for a JPA update path?",
