@@ -1,71 +1,71 @@
 {
-  "date": "2026-08-19",
-  "topic": "Diagnosing PostgreSQL lock waits with pg_stat_activity and pg_blocking_pids",
-  "tomorrowTopic": "Choosing optimistic versus pessimistic locking for concurrent updates",
-  "category": "Wednesday — Professional Engineering",
+  "date": "2026-08-20",
+  "topic": "Choosing optimistic versus pessimistic locking for concurrent updates",
+  "tomorrowTopic": "Diagnosing a lost-update bug in a concurrent REST update",
+  "category": "Thursday — Engineering Judgement",
   "hook": {
-    "headline": "Slow SQL may be waiting, not working",
-    "hook": "A PostgreSQL query can look slow because it is blocked on a lock, even when its execution plan is perfectly reasonable.",
-    "heroToken": "wait → blocker",
-    "visualCaption": "Start with the waiting backend, then identify the session preventing its lock acquisition.",
-    "microExample": "active + Lock wait → blocking PID → blocker transaction"
+    "headline": "Choose conflicts or blocking deliberately",
+    "hook": "Optimistic and pessimistic locking solve overlapping concurrency problems, but they move the cost to different parts of the request lifecycle.",
+    "heroToken": "retry ↔ wait",
+    "visualCaption": "Optimistic locking detects conflicting writes; pessimistic locking reserves database access earlier.",
+    "microExample": "rare conflicts → version check; hot row → consider database lock"
   },
   "mentalModel": {
-    "title": "Trace the wait chain",
-    "coreIdea": "pg_stat_activity shows whether an active backend is waiting and classifies the wait. When wait_event_type is Lock, pg_blocking_pids(pid) identifies sessions currently blocking that backend from acquiring its requested lock.",
+    "title": "Where should contention surface?",
+    "coreIdea": "With a versioned JPA entity, optimistic locking detects conflicting updates when the provider checks the version. Pessimistic locking requests a database-level lock earlier, so competing transactions may wait instead of progressing to a later conflict.",
     "primaryFlow": [
-      "slow request",
-      "backend PID",
-      "Lock wait",
-      "blocking PID"
+      "read version",
+      "do work",
+      "version check",
+      "commit or conflict"
     ],
     "secondaryFlow": [
-      "blocking PID",
-      "session details",
-      "transaction age",
-      "root cause"
+      "request lock",
+      "database lock",
+      "do work",
+      "commit",
+      "release lock"
     ],
-    "primaryLabel": "Detect",
-    "secondaryLabel": "Investigate",
-    "keyOutcome": "You separate lock contention from queries that are actually consuming execution time.",
-    "mentalShortcut": "backend → wait type → blocker PID → transaction"
+    "primaryLabel": "Optimistic",
+    "secondaryLabel": "Pessimistic",
+    "keyOutcome": "Choose based on contention, retry cost and how harmful blocking would be.",
+    "mentalShortcut": "contention → retry cost → lock duration → strategy"
   },
   "code": {
-    "title": "Find blocked sessions",
-    "intro": "Inspect active lock waits and ask PostgreSQL which sessions are blocking each backend.",
-    "language": "sql",
-    "code": "SELECT pid, query, wait_event,\n       pg_blocking_pids(pid) AS blockers\nFROM pg_stat_activity\nWHERE state = 'active'\n  AND wait_event_type = 'Lock';",
-    "highlightLine": 2,
-    "highlightReason": "pg_blocking_pids maps the waiting backend to sessions that currently prevent its requested lock from being acquired.",
-    "takeaway": "A blocker relationship is stronger evidence than assuming every long-running query is computationally expensive.",
-    "professionalNote": "Use pg_locks when you need lower-level detail about held and requested lock objects and modes."
+    "title": "Version the shared state",
+    "intro": "A JPA version attribute gives the provider a value for detecting conflicting entity updates.",
+    "language": "java",
+    "code": "@Entity\nclass InventoryItem {\n  @Id Long id;\n  @Version long version;\n  int available;\n}",
+    "highlightLine": 4,
+    "highlightReason": "The version value lets the persistence provider detect that another transaction changed the entity since this state was read.",
+    "takeaway": "Optimistic locking works well when conflicts are uncommon and failed work can be retried or rejected cleanly.",
+    "professionalNote": "A pessimistic lock is requested explicitly, for example with LockModeType.PESSIMISTIC_WRITE; exact SQL and lock behaviour are provider and database dependent."
   },
   "production": {
-    "title": "The hidden long transaction",
-    "scenario": "An API update exceeds its latency target. The SQL is indexed, but pg_stat_activity shows the backend active with wait_event_type = Lock while another transaction remains open.",
+    "title": "A hot inventory row",
+    "scenario": "Many checkout requests update the same inventory record. Optimistic locking avoids holding a lock during normal processing, but frequent conflicts now cause repeated retries and wasted application work.",
     "problems": [
-      "Tuning the blocked query plan does not remove the lock wait.",
-      "A long or idle-in-transaction blocker can extend contention across unrelated requests."
+      "High contention can make optimistic retries expensive or user-visible.",
+      "Pessimistic locking can reduce conflicting progress but introduces waiting and possible deadlocks."
     ],
-    "professionalApproach": "Identify the waiting PID, resolve its blocking PIDs, then inspect blocker state, query and transaction age. Fix the transaction lifecycle or concurrency pattern rather than treating lock contention as generic slow SQL.",
+    "professionalApproach": "Measure conflict frequency and transaction duration first. Prefer optimistic locking for low contention; consider a short pessimistic critical section when contention is predictably high and serialized access is acceptable.",
     "flow": [
-      "latency spike",
-      "Lock wait",
-      "blocking PID",
-      "open transaction",
-      "fix lifecycle"
+      "measure conflicts",
+      "estimate retry cost",
+      "estimate lock time",
+      "choose strategy"
     ],
-    "debugClue": "The backend is active with wait_event_type = Lock, and pg_blocking_pids returns one or more PIDs."
+    "debugClue": "Frequent optimistic-lock failures on one record indicate contention; long lock waits after switching indicate the opposite cost has surfaced.",
   },
   "interview": {
-    "question": "A PostgreSQL UPDATE suddenly takes seconds, but EXPLAIN shows a sensible indexed plan. How would you investigate lock contention?",
-    "answer": "I would check pg_stat_activity to see whether the backend is active but waiting, especially with wait_event_type = Lock. Then I would use pg_blocking_pids(pid) to identify blockers and inspect those sessions and transaction ages. If deeper lock-object detail is needed, I would inspect pg_locks before changing query or transaction design.",
+    "question": "When would you choose optimistic locking over pessimistic locking for a JPA update path?",
+    "answer": "I prefer optimistic locking when concurrent writes to the same entity are relatively uncommon and retrying or rejecting a conflict is acceptable. Pessimistic locking is more attractive when contention is predictably high and duplicated work is expensive, but I keep the transaction short because database locks can create waits and deadlocks.",
     "remember": [
-      "Check wait type",
-      "Find blocking PIDs",
-      "Inspect transactions"
+      "Optimistic detects conflicts",
+      "Pessimistic blocks earlier",
+      "Measure contention"
     ],
-    "tomorrow": "Choosing optimistic versus pessimistic locking for concurrent updates",
-    "interviewerTesting": "Whether you diagnose database latency from runtime evidence and distinguish lock waits from expensive execution."
+    "tomorrow": "Diagnosing a lost-update bug in a concurrent REST update",
+    "interviewerTesting": "Whether you can choose a concurrency strategy from workload characteristics instead of treating one lock style as universally superior."
   }
 }
