@@ -8,5 +8,10 @@
     "date": "2026-08-19",
     "topic": "Diagnosing PostgreSQL lock waits with pg_stat_activity and pg_blocking_pids",
     "category": "Wednesday — Professional Engineering"
+  },
+  {
+    "date": "2026-08-20",
+    "topic": "Choosing optimistic versus pessimistic locking for concurrent updates",
+    "category": "Thursday — Engineering Judgement"
   }
 ]
