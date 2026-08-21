@@ -1,71 +1,70 @@
 {
-  "date": "2026-08-20",
-  "topic": "Choosing optimistic versus pessimistic locking for concurrent updates",
-  "tomorrowTopic": "Diagnosing a lost-update bug in a concurrent REST update",
-  "category": "Thursday — Engineering Judgement",
+  "date": "2026-08-21",
+  "topic": "Diagnosing @Transactional self-invocation in Spring proxy mode",
+  "tomorrowTopic": "Testing Spring transaction boundaries with Testcontainers",
+  "category": "Friday — Interview Challenge",
   "hook": {
-    "headline": "Choose conflicts or blocking deliberately",
-    "hook": "Optimistic and pessimistic locking solve overlapping concurrency problems, but they move the cost to different parts of the request lifecycle.",
-    "heroToken": "retry ↔ wait",
-    "visualCaption": "Optimistic locking detects conflicting writes; pessimistic locking reserves database access earlier.",
-    "microExample": "rare conflicts → version check; hot row → consider database lock"
+    "headline": "The annotation is there. The transaction is not.",
+    "hook": "A Spring method can carry @Transactional yet skip its transaction advice when another method on the same instance calls it directly.",
+    "heroToken": "proxy boundary",
+    "visualCaption": "In Spring's default proxy mode, transaction advice runs when a call crosses the transactional proxy.",
+    "microExample": "external call → proxy → advice; self-call → target method directly"
   },
   "mentalModel": {
-    "title": "Where should contention surface?",
-    "coreIdea": "With a versioned JPA entity, optimistic locking detects conflicting updates when the provider checks the version. Pessimistic locking requests a database-level lock earlier, so competing transactions may wait instead of progressing to a later conflict.",
+    "title": "Follow the method call",
+    "coreIdea": "Spring's default declarative transaction mode uses an AOP proxy. Calls entering through that proxy can trigger TransactionInterceptor; a method calling another method on the same target instance does not re-enter the proxy, so the inner annotation is not independently applied.",
     "primaryFlow": [
-      "read version",
-      "do work",
-      "version check",
-      "commit or conflict"
+      "caller",
+      "Spring proxy",
+      "transaction advice",
+      "target method"
     ],
     "secondaryFlow": [
-      "request lock",
-      "database lock",
-      "do work",
-      "commit",
-      "release lock"
+      "target method",
+      "self-call",
+      "inner method"
     ],
-    "primaryLabel": "Optimistic",
-    "secondaryLabel": "Pessimistic",
-    "keyOutcome": "Choose based on contention, retry cost and how harmful blocking would be.",
-    "mentalShortcut": "contention → retry cost → lock duration → strategy"
+    "primaryLabel": "External call",
+    "secondaryLabel": "Self-invocation",
+    "keyOutcome": "An annotation changes behaviour only when the configured transaction infrastructure actually intercepts the invocation.",
+    "mentalShortcut": "caller → proxy → interceptor → transaction"
   },
   "code": {
-    "title": "Version the shared state",
-    "intro": "A JPA version attribute gives the provider a value for detecting conflicting entity updates.",
+    "title": "REQUIRES_NEW that never starts",
+    "intro": "This internal call does not cross the Spring proxy in the default proxy-based transaction mode.",
     "language": "java",
-    "code": "@Entity\nclass InventoryItem {\n  @Id Long id;\n  @Version long version;\n  int available;\n}",
-    "highlightLine": 4,
-    "highlightReason": "The version value lets the persistence provider detect that another transaction changed the entity since this state was read.",
-    "takeaway": "Optimistic locking works well when conflicts are uncommon and failed work can be retried or rejected cleanly.",
-    "professionalNote": "A pessimistic lock is requested explicitly, for example with LockModeType.PESSIMISTIC_WRITE; exact SQL and lock behaviour are provider and database dependent."
+    "code": "@Service\nclass AuditService {\n  private final AuditRepository repo;\n  AuditService(AuditRepository repo) { this.repo = repo; }\n  public void record(AuditEvent event) {\n    recordInNewTx(event);\n  }\n  @Transactional(propagation = Propagation.REQUIRES_NEW)\n  public void recordInNewTx(AuditEvent event) { repo.save(event); }\n}",
+    "highlightLine": 6,
+    "highlightReason": "The self-call invokes the target directly, so proxy-based transaction advice does not create the requested REQUIRES_NEW boundary here.",
+    "takeaway": "Move the transactional operation behind another Spring bean when you need a proxy-intercepted boundary.",
+    "professionalNote": "AspectJ transaction mode uses weaving rather than proxy interception, so the self-invocation limitation described here does not apply in the same way."
   },
   "production": {
-    "title": "A hot inventory row",
-    "scenario": "Many checkout requests update the same inventory record. Optimistic locking avoids holding a lock during normal processing, but frequent conflicts now cause repeated retries and wasted application work.",
+    "title": "Why did the audit row roll back?",
+    "scenario": "An order transaction calls AuditService.record(), expecting recordInNewTx() to commit independently. The order later fails, and the audit row disappears with the outer transaction.",
     "problems": [
-      "High contention can make optimistic retries expensive or user-visible.",
-      "Pessimistic locking can reduce conflicting progress but introduces waiting and possible deadlocks."
+      "The internal call bypasses the proxy, so REQUIRES_NEW is not applied at that method boundary.",
+      "An existing outer transaction can make the code appear transactional while hiding the missing independent boundary."
     ],
-    "professionalApproach": "Measure conflict frequency and transaction duration first. Prefer optimistic locking for low contention; consider a short pessimistic critical section when contention is predictably high and serialized access is acceptable.",
+    "professionalApproach": "Trace the runtime call path, not just annotations. Put the REQUIRES_NEW operation on a separate proxied bean, then verify independent commit and rollback behaviour with an integration test.",
     "flow": [
-      "measure conflicts",
-      "estimate retry cost",
-      "estimate lock time",
-      "choose strategy"
+      "order transaction",
+      "audit bean",
+      "self-call",
+      "same transaction",
+      "outer rollback"
     ],
-    "debugClue": "Frequent optimistic-lock failures on one record indicate contention; long lock waits after switching indicate the opposite cost has surfaced."
+    "debugClue": "A rollback test shows the supposedly independent audit insert disappearing whenever the outer order transaction rolls back."
   },
   "interview": {
-    "question": "When would you choose optimistic locking over pessimistic locking for a JPA update path?",
-    "answer": "I prefer optimistic locking when concurrent writes to the same entity are relatively uncommon and retrying or rejecting a conflict is acceptable. Pessimistic locking is more attractive when contention is predictably high and duplicated work is expensive, but I keep the transaction short because database locks can create waits and deadlocks.",
+    "question": "A public method annotated REQUIRES_NEW is called from another method in the same Spring bean, but no new transaction appears. Why?",
+    "answer": "With Spring's default proxy-based transaction management, transaction advice runs when the invocation crosses the proxy. A self-call stays on the target object, so the REQUIRES_NEW method is not intercepted and does not create that new boundary. I would move it to another Spring bean or deliberately choose another transaction mechanism, then verify the behaviour with an integration test.",
     "remember": [
-      "Optimistic detects conflicts",
-      "Pessimistic blocks earlier",
-      "Measure contention"
+      "Trace the proxy boundary",
+      "Self-calls bypass advice",
+      "Test rollback behaviour"
     ],
-    "tomorrow": "Diagnosing a lost-update bug in a concurrent REST update",
-    "interviewerTesting": "Whether you can choose a concurrency strategy from workload characteristics instead of treating one lock style as universally superior."
+    "tomorrow": "Testing Spring transaction boundaries with Testcontainers",
+    "interviewerTesting": "Whether you understand Spring transaction interception well enough to diagnose annotations that look correct but do not affect the runtime call."
   }
 }
