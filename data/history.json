@@ -13,5 +13,10 @@
     "date": "2026-08-20",
     "topic": "Choosing optimistic versus pessimistic locking for concurrent updates",
     "category": "Thursday — Engineering Judgement"
+  },
+  {
+    "date": "2026-08-21",
+    "topic": "Diagnosing @Transactional self-invocation in Spring proxy mode",
+    "category": "Friday — Interview Challenge"
   }
 ]
