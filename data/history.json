@@ -18,5 +18,10 @@
     "date": "2026-08-21",
     "topic": "Diagnosing @Transactional self-invocation in Spring proxy mode",
     "category": "Friday — Interview Challenge"
+  },
+  {
+    "date": "2026-08-22",
+    "topic": "Testing REQUIRES_NEW commit boundaries with Testcontainers",
+    "category": "Saturday — Practical Engineering"
   }
 ]
