@@ -1,70 +1,72 @@
 {
-  "date": "2026-08-21",
-  "topic": "Diagnosing @Transactional self-invocation in Spring proxy mode",
-  "tomorrowTopic": "Testing Spring transaction boundaries with Testcontainers",
-  "category": "Friday — Interview Challenge",
+  "date": "2026-08-22",
+  "topic": "Testing REQUIRES_NEW commit boundaries with Testcontainers",
+  "tomorrowTopic": "Transaction boundaries: proxies, propagation and commits",
+  "category": "Saturday — Practical Engineering",
   "hook": {
-    "headline": "The annotation is there. The transaction is not.",
-    "hook": "A Spring method can carry @Transactional yet skip its transaction advice when another method on the same instance calls it directly.",
-    "heroToken": "proxy boundary",
-    "visualCaption": "In Spring's default proxy mode, transaction advice runs when a call crosses the transactional proxy.",
-    "microExample": "external call → proxy → advice; self-call → target method directly"
+    "headline": "Test the commit boundary, not the annotation",
+    "hook": "A transaction test is useful only when it proves what remains committed after the surrounding operation actually rolls back.",
+    "heroToken": "commit boundary",
+    "visualCaption": "Run the real service flow, force the outer rollback, then inspect PostgreSQL from outside that transaction.",
+    "microExample": "outer rollback → audit REQUIRES_NEW commit → row still exists"
   },
   "mentalModel": {
-    "title": "Follow the method call",
-    "coreIdea": "Spring's default declarative transaction mode uses an AOP proxy. Calls entering through that proxy can trigger TransactionInterceptor; a method calling another method on the same target instance does not re-enter the proxy, so the inner annotation is not independently applied.",
+    "title": "Observe state after rollback",
+    "coreIdea": "To verify REQUIRES_NEW isolation, exercise the application through its Spring proxies, make the outer transaction fail, then query the database after that call has returned. The assertion should observe committed PostgreSQL state, not state hidden inside a test-managed transaction.",
     "primaryFlow": [
-      "caller",
-      "Spring proxy",
-      "transaction advice",
-      "target method"
+      "test",
+      "service proxy",
+      "outer transaction",
+      "REQUIRES_NEW",
+      "audit commit"
     ],
     "secondaryFlow": [
-      "target method",
-      "self-call",
-      "inner method"
+      "outer failure",
+      "outer rollback",
+      "fresh query",
+      "audit row"
     ],
-    "primaryLabel": "External call",
-    "secondaryLabel": "Self-invocation",
-    "keyOutcome": "An annotation changes behaviour only when the configured transaction infrastructure actually intercepts the invocation.",
-    "mentalShortcut": "caller → proxy → interceptor → transaction"
+    "primaryLabel": "Application flow",
+    "secondaryLabel": "Verification flow",
+    "keyOutcome": "The test proves the audit commit survives rollback of the surrounding business transaction.",
+    "mentalShortcut": "invoke → rollback outer → query fresh → verify commit"
   },
   "code": {
-    "title": "REQUIRES_NEW that never starts",
-    "intro": "This internal call does not cross the Spring proxy in the default proxy-based transaction mode.",
+    "title": "Assert after the rollback",
+    "intro": "Keep this test outside Spring's test-managed transaction and inspect committed state after the service fails.",
     "language": "java",
-    "code": "@Service\nclass AuditService {\n  private final AuditRepository repo;\n  AuditService(AuditRepository repo) { this.repo = repo; }\n  public void record(AuditEvent event) {\n    recordInNewTx(event);\n  }\n  @Transactional(propagation = Propagation.REQUIRES_NEW)\n  public void recordInNewTx(AuditEvent event) { repo.save(event); }\n}",
+    "code": "@Test\nvoid auditSurvivesOrderRollback() {\n  assertThrows(PaymentException.class,\n      () -> orderService.placeAndFail(order));\n\n  Integer count = jdbc.queryForObject(\n      \"select count(*) from audit_event where order_id = ?\",\n      Integer.class, order.id());\n  assertEquals(1, count);\n}",
     "highlightLine": 6,
-    "highlightReason": "The self-call invokes the target directly, so proxy-based transaction advice does not create the requested REQUIRES_NEW boundary here.",
-    "takeaway": "Move the transactional operation behind another Spring bean when you need a proxy-intercepted boundary.",
-    "professionalNote": "AspectJ transaction mode uses weaving rather than proxy interception, so the self-invocation limitation described here does not apply in the same way."
+    "highlightReason": "The database query runs after the failing service invocation has completed, so it checks externally visible committed state.",
+    "takeaway": "Assert the durable database outcome after the rollback path, rather than merely checking that transactional annotations are present.",
+    "professionalNote": "Use a PostgreSQL Testcontainer when PostgreSQL transaction semantics are part of what the integration test is intended to verify."
   },
   "production": {
-    "title": "Why did the audit row roll back?",
-    "scenario": "An order transaction calls AuditService.record(), expecting recordInNewTx() to commit independently. The order later fails, and the audit row disappears with the outer transaction.",
+    "title": "A green test can still prove little",
+    "scenario": "A test expects an audit insert to survive an order rollback. It is annotated @Transactional, calls both repositories directly, and passes without exercising the same boundaries used in production.",
     "problems": [
-      "The internal call bypasses the proxy, so REQUIRES_NEW is not applied at that method boundary.",
-      "An existing outer transaction can make the code appear transactional while hiding the missing independent boundary."
+      "A test-managed transaction changes the transactional context in which the application code runs.",
+      "Direct repository calls can bypass the service-level proxy and propagation path the test is supposed to verify."
     ],
-    "professionalApproach": "Trace the runtime call path, not just annotations. Put the REQUIRES_NEW operation on a separate proxied bean, then verify independent commit and rollback behaviour with an integration test.",
+    "professionalApproach": "Call the public service entry point without a test-level transaction, deliberately trigger the outer failure, then query the Testcontainers PostgreSQL database and assert the independently committed row remains.",
     "flow": [
-      "order transaction",
-      "audit bean",
-      "self-call",
-      "same transaction",
-      "outer rollback"
+      "service call",
+      "audit commit",
+      "outer rollback",
+      "database query",
+      "assert row"
     ],
-    "debugClue": "A rollback test shows the supposedly independent audit insert disappearing whenever the outer order transaction rolls back."
+    "debugClue": "A test passes when repositories are called directly but fails when the same scenario is executed through the service layer."
   },
   "interview": {
-    "question": "A public method annotated REQUIRES_NEW is called from another method in the same Spring bean, but no new transaction appears. Why?",
-    "answer": "With Spring's default proxy-based transaction management, transaction advice runs when the invocation crosses the proxy. A self-call stays on the target object, so the REQUIRES_NEW method is not intercepted and does not create that new boundary. I would move it to another Spring bean or deliberately choose another transaction mechanism, then verify the behaviour with an integration test.",
+    "question": "How would you prove that a Spring REQUIRES_NEW audit write really commits even when the surrounding operation rolls back?",
+    "answer": "I would write an integration test against PostgreSQL, invoke the real proxied service flow, force the outer transaction to fail, and then query the database after that call completes. I would avoid wrapping the test itself in a test-managed transaction because that changes the surrounding transactional context and can make propagation tests harder to reason about.",
     "remember": [
-      "Trace the proxy boundary",
-      "Self-calls bypass advice",
-      "Test rollback behaviour"
+      "Exercise real proxies",
+      "Force the rollback",
+      "Query committed state"
     ],
-    "tomorrow": "Testing Spring transaction boundaries with Testcontainers",
-    "interviewerTesting": "Whether you understand Spring transaction interception well enough to diagnose annotations that look correct but do not affect the runtime call."
+    "tomorrow": "Transaction boundaries: proxies, propagation and commits",
+    "interviewerTesting": "Whether you can design an integration test that proves transaction propagation through observable database state rather than annotations alone."
   }
 }
