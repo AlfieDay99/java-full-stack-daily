@@ -1,72 +1,73 @@
 {
-  "date": "2026-08-22",
-  "topic": "Testing REQUIRES_NEW commit boundaries with Testcontainers",
-  "tomorrowTopic": "Transaction boundaries: proxies, propagation and commits",
-  "category": "Saturday — Practical Engineering",
+  "date": "2026-08-23",
+  "topic": "Rollback-only propagation with Spring PROPAGATION_REQUIRED",
+  "tomorrowTopic": "Java equals and hashCode contracts for value objects",
+  "category": "Sunday — Weekly Consolidation",
   "hook": {
-    "headline": "Test the commit boundary, not the annotation",
-    "hook": "A transaction test is useful only when it proves what remains committed after the surrounding operation actually rolls back.",
-    "heroToken": "commit boundary",
-    "visualCaption": "Run the real service flow, force the outer rollback, then inspect PostgreSQL from outside that transaction.",
-    "microExample": "outer rollback → audit REQUIRES_NEW commit → row still exists"
+    "headline": "Catching the exception may not save the transaction",
+    "hook": "With Spring REQUIRED propagation, an inner failure can mark the shared transaction rollback-only before the outer method catches it.",
+    "heroToken": "rollback-only",
+    "visualCaption": "The caller can continue executing while the shared physical transaction is already unable to commit.",
+    "microExample": "inner failure → caught outside → commit attempt → rollback"
   },
   "mentalModel": {
-    "title": "Observe state after rollback",
-    "coreIdea": "To verify REQUIRES_NEW isolation, exercise the application through its Spring proxies, make the outer transaction fail, then query the database after that call has returned. The assertion should observe committed PostgreSQL state, not state hidden inside a test-managed transaction.",
+    "title": "Logical scopes, one physical transaction",
+    "coreIdea": "Each REQUIRED transactional method has a logical transaction scope, but participating scopes commonly map to the same physical transaction. If an inner scope marks that transaction rollback-only, catching its exception in the caller does not restore commit eligibility.",
     "primaryFlow": [
-      "test",
-      "service proxy",
-      "outer transaction",
-      "REQUIRES_NEW",
-      "audit commit"
+      "outer proxy",
+      "transaction starts",
+      "inner REQUIRED",
+      "same transaction",
+      "rollback-only"
     ],
     "secondaryFlow": [
-      "outer failure",
-      "outer rollback",
-      "fresh query",
-      "audit row"
+      "caller catches",
+      "caller continues",
+      "commit attempt",
+      "rollback",
+      "commit exception"
     ],
-    "primaryLabel": "Application flow",
-    "secondaryLabel": "Verification flow",
-    "keyOutcome": "The test proves the audit commit survives rollback of the surrounding business transaction.",
-    "mentalShortcut": "invoke → rollback outer → query fresh → verify commit"
+    "primaryLabel": "Shared transaction",
+    "secondaryLabel": "Later outcome",
+    "keyOutcome": "Control flow may recover while transaction state has already changed irreversibly for that transaction.",
+    "mentalShortcut": "inner failure → rollback-only → catch → failed commit"
   },
   "code": {
-    "title": "Assert after the rollback",
-    "intro": "Keep this test outside Spring's test-managed transaction and inspect committed state after the service fails.",
+    "title": "A catch does not clear rollback-only",
+    "intro": "Assume reserve is a proxied REQUIRED method and its RuntimeException uses Spring's default rollback rule.",
     "language": "java",
-    "code": "@Test\nvoid auditSurvivesOrderRollback() {\n  assertThrows(PaymentException.class,\n      () -> orderService.placeAndFail(order));\n\n  Integer count = jdbc.queryForObject(\n      \"select count(*) from audit_event where order_id = ?\",\n      Integer.class, order.id());\n  assertEquals(1, count);\n}",
+    "code": "@Transactional\npublic void place(Order order) {\n  orderRepo.save(order);\n  try {\n    inventoryService.reserve(order.id());\n  } catch (RuntimeException ex) {\n    log.warn(\"Reservation failed\", ex);\n  }\n}",
     "highlightLine": 6,
-    "highlightReason": "The database query runs after the failing service invocation has completed, so it checks externally visible committed state.",
-    "takeaway": "Assert the durable database outcome after the rollback path, rather than merely checking that transactional annotations are present.",
-    "professionalNote": "Use a PostgreSQL Testcontainer when PostgreSQL transaction semantics are part of what the integration test is intended to verify."
+    "highlightReason": "The caller catches the exception after the inner transactional interceptor can already have marked the shared transaction rollback-only.",
+    "takeaway": "Exception handling and transaction outcome are related but separate; inspect propagation and rollback rules when reasoning about recovery.",
+    "professionalNote": "Catching RuntimeException broadly is illustrative here, not a recommended error-handling policy for production code."
   },
   "production": {
-    "title": "A green test can still prove little",
-    "scenario": "A test expects an audit insert to survive an order rollback. It is annotated @Transactional, calls both repositories directly, and passes without exercising the same boundaries used in production.",
+    "title": "The method continues, then commit fails",
+    "scenario": "An order service catches a failure from another REQUIRED service, logs it, performs more work and appears to recover, but the request still fails when the outer transaction completes.",
     "problems": [
-      "A test-managed transaction changes the transactional context in which the application code runs.",
-      "Direct repository calls can bypass the service-level proxy and propagation path the test is supposed to verify."
+      "The inner transactional scope marked the shared physical transaction rollback-only.",
+      "Later writes in that same transaction cannot turn a rollback-only transaction back into a committable one."
     ],
-    "professionalApproach": "Call the public service entry point without a test-level transaction, deliberately trigger the outer failure, then query the Testcontainers PostgreSQL database and assert the independently committed row remains.",
+    "professionalApproach": "Trace calls through transactional proxy boundaries, inspect propagation and rollback rules, then decide whether the failure should abort the unit of work or needs an independent transaction or redesigned boundary.",
     "flow": [
-      "service call",
-      "audit commit",
-      "outer rollback",
-      "database query",
-      "assert row"
+      "outer call",
+      "inner failure",
+      "rollback-only",
+      "catch",
+      "commit fails"
     ],
-    "debugClue": "A test passes when repositories are called directly but fails when the same scenario is executed through the service layer."
+    "debugClue": "Business code reaches its final log statement, yet transaction completion throws UnexpectedRollbackException and none of the shared writes commit."
   },
   "interview": {
-    "question": "How would you prove that a Spring REQUIRES_NEW audit write really commits even when the surrounding operation rolls back?",
-    "answer": "I would write an integration test against PostgreSQL, invoke the real proxied service flow, force the outer transaction to fail, and then query the database after that call completes. I would avoid wrapping the test itself in a test-managed transaction because that changes the surrounding transactional context and can make propagation tests harder to reason about.",
+    "question": "Why can a Spring transaction still roll back after the outer service catches an exception from an inner REQUIRED method?",
+    "answer": "With REQUIRED propagation, the inner and outer logical transaction scopes can participate in the same physical transaction. If the inner transactional interceptor marks it rollback-only under the configured rollback rules, catching the exception later changes control flow but not that transaction state. The outer commit then rolls back and can surface UnexpectedRollbackException.",
     "remember": [
-      "Exercise real proxies",
-      "Force the rollback",
-      "Query committed state"
+      "REQUIRED can share",
+      "Catch ≠ commit",
+      "Rollback-only persists"
     ],
-    "tomorrow": "Transaction boundaries: proxies, propagation and commits",
-    "interviewerTesting": "Whether you can design an integration test that proves transaction propagation through observable database state rather than annotations alone."
+    "tomorrow": "Java equals and hashCode contracts for value objects",
+    "interviewerTesting": "Whether you distinguish proxy interception, logical propagation scopes, exception handling and the final physical transaction outcome."
   }
 }
