@@ -28,5 +28,10 @@
     "date": "2026-08-23",
     "topic": "Rollback-only propagation with Spring PROPAGATION_REQUIRED",
     "category": "Sunday — Weekly Consolidation"
+  },
+  {
+    "date": "2026-08-24",
+    "topic": "Java equals and hashCode contracts for value objects",
+    "category": "Monday — Fundamentals"
   }
 ]
