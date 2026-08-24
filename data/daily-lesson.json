@@ -1,73 +1,70 @@
 {
-  "date": "2026-08-23",
-  "topic": "Rollback-only propagation with Spring PROPAGATION_REQUIRED",
-  "tomorrowTopic": "Java equals and hashCode contracts for value objects",
-  "category": "Sunday — Weekly Consolidation",
+  "date": "2026-08-24",
+  "topic": "Java equals and hashCode contracts for value objects",
+  "tomorrowTopic": "How Spring constructor injection resolves dependencies",
+  "category": "Monday — Fundamentals",
   "hook": {
-    "headline": "Catching the exception may not save the transaction",
-    "hook": "With Spring REQUIRED propagation, an inner failure can mark the shared transaction rollback-only before the outer method catches it.",
-    "heroToken": "rollback-only",
-    "visualCaption": "The caller can continue executing while the shared physical transaction is already unable to commit.",
-    "microExample": "inner failure → caught outside → commit attempt → rollback"
+    "headline": "Equal objects must agree on their hash code",
+    "hook": "Java equality is not just an equals method decision: hash-based collections also rely on a compatible hashCode implementation.",
+    "heroToken": "equals + hashCode",
+    "visualCaption": "Equality defines semantic sameness; hashCode provides a compatible bucket hint for hash-based collections.",
+    "microExample": "same value → equals true → same hash code"
   },
   "mentalModel": {
-    "title": "Logical scopes, one physical transaction",
-    "coreIdea": "Each REQUIRED transactional method has a logical transaction scope, but participating scopes commonly map to the same physical transaction. If an inner scope marks that transaction rollback-only, catching its exception in the caller does not restore commit eligibility.",
+    "title": "One equality relation, two methods",
+    "coreIdea": "equals defines whether two objects are semantically equal. hashCode supports hash-based lookup. The key contract is one-way: objects that are equal must produce the same hash code, while unequal objects may still collide.",
     "primaryFlow": [
-      "outer proxy",
-      "transaction starts",
-      "inner REQUIRED",
-      "same transaction",
-      "rollback-only"
+      "two objects",
+      "equals true",
+      "same hash code"
     ],
     "secondaryFlow": [
-      "caller catches",
-      "caller continues",
-      "commit attempt",
-      "rollback",
-      "commit exception"
+      "hash lookup",
+      "bucket candidate",
+      "equals check",
+      "match"
     ],
-    "primaryLabel": "Shared transaction",
-    "secondaryLabel": "Later outcome",
-    "keyOutcome": "Control flow may recover while transaction state has already changed irreversibly for that transaction.",
-    "mentalShortcut": "inner failure → rollback-only → catch → failed commit"
+    "primaryLabel": "Contract",
+    "secondaryLabel": "Hash collection",
+    "keyOutcome": "A broken contract can make logically equal keys behave inconsistently in HashMap or HashSet.",
+    "mentalShortcut": "value fields → equals → hashCode → lookup"
   },
   "code": {
-    "title": "A catch does not clear rollback-only",
-    "intro": "Assume reserve is a proxied REQUIRED method and its RuntimeException uses Spring's default rollback rule.",
+    "title": "Keep equality and hashing aligned",
+    "intro": "Base both methods on the same fields that define the value object's semantic identity.",
     "language": "java",
-    "code": "@Transactional\npublic void place(Order order) {\n  orderRepo.save(order);\n  try {\n    inventoryService.reserve(order.id());\n  } catch (RuntimeException ex) {\n    log.warn(\"Reservation failed\", ex);\n  }\n}",
-    "highlightLine": 6,
-    "highlightReason": "The caller catches the exception after the inner transactional interceptor can already have marked the shared transaction rollback-only.",
-    "takeaway": "Exception handling and transaction outcome are related but separate; inspect propagation and rollback rules when reasoning about recovery.",
-    "professionalNote": "Catching RuntimeException broadly is illustrative here, not a recommended error-handling policy for production code."
+    "code": "@Override\npublic boolean equals(Object o) {\n  if (this == o) return true;\n  if (!(o instanceof Money other)) return false;\n  return cents == other.cents && currency.equals(other.currency);\n}\n@Override\npublic int hashCode() {\n  return Objects.hash(cents, currency);\n}",
+    "highlightLine": 9,
+    "highlightReason": "hashCode uses the same value-defining fields as equals, preserving the required relationship for equal Money instances.",
+    "takeaway": "If equality changes when a field changes, hashing should reflect the same equality definition.",
+    "professionalNote": "For immutable value types, stable equality fields also avoid key mutation problems after insertion into hash collections."
   },
   "production": {
-    "title": "The method continues, then commit fails",
-    "scenario": "An order service catches a failure from another REQUIRED service, logs it, performs more work and appears to recover, but the request still fails when the outer transaction completes.",
+    "title": "Why broken equality becomes a real bug",
+    "scenario": "A service constructs two Money instances representing the same value, but one is used as a HashMap key and later lookup with the other unexpectedly misses.",
     "problems": [
-      "The inner transactional scope marked the shared physical transaction rollback-only.",
-      "Later writes in that same transaction cannot turn a rollback-only transaction back into a committable one."
+      "equals says the keys are equal, but inconsistent hash codes can direct lookup to different buckets.",
+      "Mutating equality-relevant fields after insertion can also make a key difficult to find using its new state."
     ],
-    "professionalApproach": "Trace calls through transactional proxy boundaries, inspect propagation and rollback rules, then decide whether the failure should abort the unit of work or needs an independent transaction or redesigned boundary.",
+    "professionalApproach": "Define semantic identity deliberately, use the same fields in equals and hashCode, prefer immutable value objects, and test equality behavior including hash-based collection lookup.",
     "flow": [
-      "outer call",
-      "inner failure",
-      "rollback-only",
-      "catch",
-      "commit fails"
+      "create key",
+      "compute hash",
+      "store bucket",
+      "lookup key",
+      "equals match"
     ],
-    "debugClue": "Business code reaches its final log statement, yet transaction completion throws UnexpectedRollbackException and none of the shared writes commit."
+    "debugClue": "Two keys print identical business values and equals returns true, yet HashMap.get with the second key returns null."
   },
   "interview": {
-    "question": "Why can a Spring transaction still roll back after the outer service catches an exception from an inner REQUIRED method?",
-    "answer": "With REQUIRED propagation, the inner and outer logical transaction scopes can participate in the same physical transaction. If the inner transactional interceptor marks it rollback-only under the configured rollback rules, catching the exception later changes control flow but not that transaction state. The outer commit then rolls back and can surface UnexpectedRollbackException.",
+    "question": "What contract must equals and hashCode satisfy, and why does it matter for HashMap keys?",
+    "answer": "If two objects are equal according to equals, they must return the same hash code. The reverse is not required because collisions are valid. HashMap uses the hash to narrow candidate entries and then equality to identify a matching key, so inconsistent implementations can make logically equal keys fail lookup.",
     "remember": [
-      "REQUIRED can share",
-      "Catch ≠ commit",
-      "Rollback-only persists"
+      "Equal → same hash",
+      "Collisions are valid",
+      "Use stable fields"
     ],
-    "tomorrow": "Java equals and hashCode contracts for value objects",
-    "interviewerTesting": "Whether you distinguish proxy interception, logical propagation scopes, exception handling and the final physical transaction outcome."
+    "tomorrow": "How Spring constructor injection resolves dependencies",
+    "interviewerTesting": "Whether you understand the equality contract, hash collisions and the practical behavior of hash-based collections."
   }
 }
