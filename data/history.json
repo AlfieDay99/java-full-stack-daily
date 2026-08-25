@@ -33,5 +33,10 @@
     "date": "2026-08-24",
     "topic": "Java equals and hashCode contracts for value objects",
     "category": "Monday — Fundamentals"
+  },
+  {
+    "date": "2026-08-25",
+    "topic": "How Spring resolves constructor dependencies with multiple bean candidates",
+    "category": "Tuesday — Core Working Knowledge"
   }
 ]
