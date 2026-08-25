@@ -1,70 +1,71 @@
 {
-  "date": "2026-08-24",
-  "topic": "Java equals and hashCode contracts for value objects",
-  "tomorrowTopic": "How Spring constructor injection resolves dependencies",
-  "category": "Monday — Fundamentals",
+  "date": "2026-08-25",
+  "topic": "How Spring resolves constructor dependencies with multiple bean candidates",
+  "tomorrowTopic": "Diagnosing unexpected React effect reruns from unstable dependencies",
+  "category": "Tuesday — Core Working Knowledge",
   "hook": {
-    "headline": "Equal objects must agree on their hash code",
-    "hook": "Java equality is not just an equals method decision: hash-based collections also rely on a compatible hashCode implementation.",
-    "heroToken": "equals + hashCode",
-    "visualCaption": "Equality defines semantic sameness; hashCode provides a compatible bucket hint for hash-based collections.",
-    "microExample": "same value → equals true → same hash code"
+    "headline": "Spring does not guess between matching beans",
+    "hook": "Constructor injection starts with candidate beans matching the dependency type, then uses narrowing rules when more than one candidate exists.",
+    "heroToken": "type → candidate",
+    "visualCaption": "A single-valued dependency needs one resolvable candidate after Spring applies its autowiring selection rules.",
+    "microExample": "two PaymentClient beans → qualifier narrows → one injected"
   },
   "mentalModel": {
-    "title": "One equality relation, two methods",
-    "coreIdea": "equals defines whether two objects are semantically equal. hashCode supports hash-based lookup. The key contract is one-way: objects that are equal must produce the same hash code, while unequal objects may still collide.",
+    "title": "Resolve, then inject",
+    "coreIdea": "For a single constructor parameter, Spring first finds autowire candidates compatible with the required type. If several remain, metadata such as qualifiers or a primary candidate can narrow the choice; unresolved ambiguity causes bean creation to fail rather than selecting arbitrarily.",
     "primaryFlow": [
-      "two objects",
-      "equals true",
-      "same hash code"
+      "parameter type",
+      "find candidates",
+      "narrow choice",
+      "inject bean"
     ],
     "secondaryFlow": [
-      "hash lookup",
-      "bucket candidate",
-      "equals check",
-      "match"
+      "parameter type",
+      "multiple candidates",
+      "still ambiguous",
+      "startup failure"
     ],
-    "primaryLabel": "Contract",
-    "secondaryLabel": "Hash collection",
-    "keyOutcome": "A broken contract can make logically equal keys behave inconsistently in HashMap or HashSet.",
-    "mentalShortcut": "value fields → equals → hashCode → lookup"
+    "primaryLabel": "Resolvable",
+    "secondaryLabel": "Ambiguous",
+    "keyOutcome": "Constructor injection makes dependency ambiguity visible during container creation instead of hiding an arbitrary selection.",
+    "mentalShortcut": "type → candidates → qualifier/primary → injection"
   },
   "code": {
-    "title": "Keep equality and hashing aligned",
-    "intro": "Base both methods on the same fields that define the value object's semantic identity.",
+    "title": "Qualify the injection point",
+    "intro": "Use a qualifier when the dependency requires a specific implementation among multiple beans of one type.",
     "language": "java",
-    "code": "@Override\npublic boolean equals(Object o) {\n  if (this == o) return true;\n  if (!(o instanceof Money other)) return false;\n  return cents == other.cents && currency.equals(other.currency);\n}\n@Override\npublic int hashCode() {\n  return Objects.hash(cents, currency);\n}",
-    "highlightLine": 9,
-    "highlightReason": "hashCode uses the same value-defining fields as equals, preserving the required relationship for equal Money instances.",
-    "takeaway": "If equality changes when a field changes, hashing should reflect the same equality definition.",
-    "professionalNote": "For immutable value types, stable equality fields also avoid key mutation problems after insertion into hash collections."
+    "code": "@Service\nclass CheckoutService {\n  CheckoutService(\n      @Qualifier(\"stripe\") PaymentClient client) {\n    this.client = client;\n  }\n\n  private final PaymentClient client;\n}",
+    "highlightLine": 4,
+    "highlightReason": "The qualifier narrows compatible PaymentClient candidates to those carrying the matching qualifier metadata.",
+    "takeaway": "The declared type defines the candidate set; qualification expresses which candidate this dependency intends to use.",
+    "professionalNote": "Prefer explicit qualification when multiple implementations have distinct business roles instead of relying on incidental bean naming."
   },
   "production": {
-    "title": "Why broken equality becomes a real bug",
-    "scenario": "A service constructs two Money instances representing the same value, but one is used as a HashMap key and later lookup with the other unexpectedly misses.",
+    "title": "When a second implementation breaks startup",
+    "scenario": "A team adds a second PaymentClient implementation for a migration. CheckoutService previously had one type match, but now its unqualified constructor parameter has multiple eligible candidates.",
     "problems": [
-      "equals says the keys are equal, but inconsistent hash codes can direct lookup to different buckets.",
-      "Mutating equality-relevant fields after insertion can also make a key difficult to find using its new state."
+      "The dependency becomes ambiguous and application-context creation can fail.",
+      "Marking one implementation primary may hide whether every consumer actually intends that default."
     ],
-    "professionalApproach": "Define semantic identity deliberately, use the same fields in equals and hashCode, prefer immutable value objects, and test equality behavior including hash-based collection lookup.",
+    "professionalApproach": "Decide whether one implementation is genuinely the application-wide default. Use a primary candidate for that case; otherwise qualify consumers so each dependency communicates its intended implementation.",
     "flow": [
-      "create key",
-      "compute hash",
-      "store bucket",
-      "lookup key",
-      "equals match"
+      "new bean",
+      "same interface",
+      "multiple matches",
+      "narrow selection",
+      "context starts"
     ],
-    "debugClue": "Two keys print identical business values and equals returns true, yet HashMap.get with the second key returns null."
+    "debugClue": "Startup reports that a single dependency expected one bean but multiple candidates of the required type are available."
   },
   "interview": {
-    "question": "What contract must equals and hashCode satisfy, and why does it matter for HashMap keys?",
-    "answer": "If two objects are equal according to equals, they must return the same hash code. The reverse is not required because collisions are valid. HashMap uses the hash to narrow candidate entries and then equality to identify a matching key, so inconsistent implementations can make logically equal keys fail lookup.",
+    "question": "How does Spring decide what to inject when a constructor parameter has multiple beans of the same interface type?",
+    "answer": "Spring resolves autowiring candidates compatible with the parameter type, then applies candidate-selection metadata such as qualifiers or a primary designation. If a single-valued dependency still has multiple eligible candidates, Spring does not choose one arbitrarily; bean creation fails. I use qualifiers when implementations represent distinct roles and primary only for a genuine default.",
     "remember": [
-      "Equal → same hash",
-      "Collisions are valid",
-      "Use stable fields"
+      "Type finds candidates",
+      "Metadata narrows",
+      "Ambiguity fails"
     ],
-    "tomorrow": "How Spring constructor injection resolves dependencies",
-    "interviewerTesting": "Whether you understand the equality contract, hash collisions and the practical behavior of hash-based collections."
+    "tomorrow": "Diagnosing unexpected React effect reruns from unstable dependencies",
+    "interviewerTesting": "Whether you understand container resolution mechanics and can choose explicit wiring semantics when multiple implementations coexist."
   }
 }
