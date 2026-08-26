@@ -1,71 +1,73 @@
 {
-  "date": "2026-08-25",
-  "topic": "How Spring resolves constructor dependencies with multiple bean candidates",
-  "tomorrowTopic": "Diagnosing unexpected React effect reruns from unstable dependencies",
-  "category": "Tuesday — Core Working Knowledge",
+  "date": "2026-08-26",
+  "topic": "Diagnosing React effects that rerun because object dependencies change identity",
+  "tomorrowTopic": "Choosing offset versus keyset pagination for REST APIs",
+  "category": "Wednesday — Professional Engineering",
   "hook": {
-    "headline": "Spring does not guess between matching beans",
-    "hook": "Constructor injection starts with candidate beans matching the dependency type, then uses narrowing rules when more than one candidate exists.",
-    "heroToken": "type → candidate",
-    "visualCaption": "A single-valued dependency needs one resolvable candidate after Spring applies its autowiring selection rules.",
-    "microExample": "two PaymentClient beans → qualifier narrows → one injected"
+    "headline": "Your Effect dependency may change every render",
+    "hook": "An object created during rendering has a new identity, so an Effect depending on it can reconnect after unrelated renders.",
+    "heroToken": "Object.is",
+    "visualCaption": "React compares each dependency with its previous value using Object.is after a commit.",
+    "microExample": "new object → dependency changed → cleanup → setup"
   },
   "mentalModel": {
-    "title": "Resolve, then inject",
-    "coreIdea": "For a single constructor parameter, Spring first finds autowire candidates compatible with the required type. If several remain, metadata such as qualifiers or a primary candidate can narrow the choice; unresolved ambiguity causes bean creation to fail rather than selecting arbitrarily.",
+    "title": "Identity drives dependency changes",
+    "coreIdea": "React compares each Effect dependency with its previous value using Object.is. A freshly created object is a different reference, even when its fields match, so the Effect can run cleanup and setup again after a commit.",
     "primaryFlow": [
-      "parameter type",
-      "find candidates",
-      "narrow choice",
-      "inject bean"
+      "render",
+      "new object",
+      "commit",
+      "dependency differs",
+      "cleanup + setup"
     ],
     "secondaryFlow": [
-      "parameter type",
-      "multiple candidates",
-      "still ambiguous",
-      "startup failure"
+      "render",
+      "same primitive",
+      "commit",
+      "dependency equal",
+      "effect skipped"
     ],
-    "primaryLabel": "Resolvable",
-    "secondaryLabel": "Ambiguous",
-    "keyOutcome": "Constructor injection makes dependency ambiguity visible during container creation instead of hiding an arbitrary selection.",
-    "mentalShortcut": "type → candidates → qualifier/primary → injection"
+    "primaryLabel": "Unstable object",
+    "secondaryLabel": "Stable dependency",
+    "keyOutcome": "Dependency identity can cause extra synchronization even when the underlying business value did not change.",
+    "mentalShortcut": "render → new reference → Object.is false → effect reruns"
   },
   "code": {
-    "title": "Qualify the injection point",
-    "intro": "Use a qualifier when the dependency requires a specific implementation among multiple beans of one type.",
-    "language": "java",
-    "code": "@Service\nclass CheckoutService {\n  CheckoutService(\n      @Qualifier(\"stripe\") PaymentClient client) {\n    this.client = client;\n  }\n\n  private final PaymentClient client;\n}",
-    "highlightLine": 4,
-    "highlightReason": "The qualifier narrows compatible PaymentClient candidates to those carrying the matching qualifier metadata.",
-    "takeaway": "The declared type defines the candidate set; qualification expresses which candidate this dependency intends to use.",
-    "professionalNote": "Prefer explicit qualification when multiple implementations have distinct business roles instead of relying on incidental bean naming."
+    "title": "Create options inside the Effect",
+    "intro": "Depend on the primitive values that actually control the external synchronization.",
+    "language": "typescript",
+    "code": "useEffect(() => {\n  const options = { serverUrl, roomId };\n  const connection = connect(options);\n  connection.open();\n  return () => connection.close();\n}, [serverUrl, roomId]);",
+    "highlightLine": 6,
+    "highlightReason": "The Effect now depends on primitive values instead of an options object recreated during rendering.",
+    "takeaway": "Restructure the Effect so its dependency list reflects the reactive values that genuinely control synchronization.",
+    "professionalNote": "Do not remove required dependencies merely to suppress reruns; change the surrounding code so the dependency is unnecessary."
   },
   "production": {
-    "title": "When a second implementation breaks startup",
-    "scenario": "A team adds a second PaymentClient implementation for a migration. CheckoutService previously had one type match, but now its unqualified constructor parameter has multiple eligible candidates.",
+    "title": "Unexpected reconnects after harmless UI updates",
+    "scenario": "A websocket Effect depends on a render-created options object. Typing into unrelated local state re-renders the component, producing a new options reference and reconnecting the socket.",
     "problems": [
-      "The dependency becomes ambiguous and application-context creation can fail.",
-      "Marking one implementation primary may hide whether every consumer actually intends that default."
+      "Cleanup closes a healthy connection and setup opens another even though serverUrl and roomId are unchanged.",
+      "Extra reconnects can obscure the trigger because the object contents look identical in logs."
     ],
-    "professionalApproach": "Decide whether one implementation is genuinely the application-wide default. Use a primary candidate for that case; otherwise qualify consumers so each dependency communicates its intended implementation.",
+    "professionalApproach": "Inspect dependencies across consecutive renders. Use Object.is to identify the changing value, then remove unnecessary object creation from the dependency boundary rather than disabling exhaustive-deps.",
     "flow": [
-      "new bean",
-      "same interface",
-      "multiple matches",
-      "narrow selection",
-      "context starts"
+      "UI state changes",
+      "component renders",
+      "new options",
+      "effect reruns",
+      "socket reconnects"
     ],
-    "debugClue": "Startup reports that a single dependency expected one bean but multiple candidates of the required type are available."
+    "debugClue": "Logged option fields are unchanged, but Object.is(previousOptions, currentOptions) returns false across renders."
   },
   "interview": {
-    "question": "How does Spring decide what to inject when a constructor parameter has multiple beans of the same interface type?",
-    "answer": "Spring resolves autowiring candidates compatible with the parameter type, then applies candidate-selection metadata such as qualifiers or a primary designation. If a single-valued dependency still has multiple eligible candidates, Spring does not choose one arbitrarily; bean creation fails. I use qualifiers when implementations represent distinct roles and primary only for a genuine default.",
+    "question": "Why can a React Effect rerun when an object dependency appears to contain exactly the same values?",
+    "answer": "React compares Effect dependencies with their previous values using Object.is. Two separately created objects are different references, even if their properties match, so React treats that dependency as changed. I usually remove unnecessary object dependencies by creating the object inside the Effect and depending on the primitive reactive values it actually uses.",
     "remember": [
-      "Type finds candidates",
-      "Metadata narrows",
-      "Ambiguity fails"
+      "Dependencies use Object.is",
+      "New object, new identity",
+      "Restructure before memoizing"
     ],
-    "tomorrow": "Diagnosing unexpected React effect reruns from unstable dependencies",
-    "interviewerTesting": "Whether you understand container resolution mechanics and can choose explicit wiring semantics when multiple implementations coexist."
+    "tomorrow": "Choosing offset versus keyset pagination for REST APIs",
+    "interviewerTesting": "Whether you can connect render-time identity, Effect dependency comparison, and production debugging without suppressing correct dependency tracking."
   }
 }
