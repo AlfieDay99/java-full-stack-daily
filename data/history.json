@@ -38,5 +38,10 @@
     "date": "2026-08-25",
     "topic": "How Spring resolves constructor dependencies with multiple bean candidates",
     "category": "Tuesday — Core Working Knowledge"
+  },
+  {
+    "date": "2026-08-26",
+    "topic": "Diagnosing React effects that rerun because object dependencies change identity",
+    "category": "Wednesday — Professional Engineering"
   }
 ]
