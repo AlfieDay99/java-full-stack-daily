@@ -1,73 +1,71 @@
 {
-  "date": "2026-08-26",
-  "topic": "Diagnosing React effects that rerun because object dependencies change identity",
-  "tomorrowTopic": "Choosing offset versus keyset pagination for REST APIs",
-  "category": "Wednesday — Professional Engineering",
+  "date": "2026-08-27",
+  "topic": "Choosing offset versus keyset pagination for REST APIs",
+  "tomorrowTopic": "Diagnosing duplicate POST effects after client retries",
+  "category": "Thursday — Engineering Judgement",
   "hook": {
-    "headline": "Your Effect dependency may change every render",
-    "hook": "An object created during rendering has a new identity, so an Effect depending on it can reconnect after unrelated renders.",
-    "heroToken": "Object.is",
-    "visualCaption": "React compares each dependency with its previous value using Object.is after a commit.",
-    "microExample": "new object → dependency changed → cleanup → setup"
+    "headline": "Pagination is a consistency trade-off",
+    "hook": "OFFSET is simple and page-oriented; keyset pagination trades random page jumps for efficient, stable traversal by sort key.",
+    "heroToken": "OFFSET vs CURSOR",
+    "visualCaption": "Offset locates rows by position; keyset locates the next page relative to the last sort key.",
+    "microExample": "page 500 → skip rows | cursor → continue after key"
   },
   "mentalModel": {
-    "title": "Identity drives dependency changes",
-    "coreIdea": "React compares each Effect dependency with its previous value using Object.is. A freshly created object is a different reference, even when its fields match, so the Effect can run cleanup and setup again after a commit.",
+    "title": "Position versus continuation key",
+    "coreIdea": "Offset pagination asks the database to skip a position in an ordered result. Keyset pagination carries the last row's unique ordering values forward and filters relative to them, avoiding work proportional to a large offset when the query can use a suitable index.",
     "primaryFlow": [
-      "render",
-      "new object",
-      "commit",
-      "dependency differs",
-      "cleanup + setup"
+      "page number",
+      "OFFSET N",
+      "skip rows",
+      "return page"
     ],
     "secondaryFlow": [
-      "render",
-      "same primitive",
-      "commit",
-      "dependency equal",
-      "effect skipped"
+      "cursor",
+      "seek predicate",
+      "ordered rows",
+      "next cursor"
     ],
-    "primaryLabel": "Unstable object",
-    "secondaryLabel": "Stable dependency",
-    "keyOutcome": "Dependency identity can cause extra synchronization even when the underlying business value did not change.",
-    "mentalShortcut": "render → new reference → Object.is false → effect reruns"
+    "primaryLabel": "Offset",
+    "secondaryLabel": "Keyset",
+    "keyOutcome": "Choose based on navigation needs, ordering guarantees, data churn, and the query plan—not API fashion.",
+    "mentalShortcut": "position → OFFSET | last key → seek → continue"
   },
   "code": {
-    "title": "Create options inside the Effect",
-    "intro": "Depend on the primitive values that actually control the external synchronization.",
-    "language": "typescript",
-    "code": "useEffect(() => {\n  const options = { serverUrl, roomId };\n  const connection = connect(options);\n  connection.open();\n  return () => connection.close();\n}, [serverUrl, roomId]);",
-    "highlightLine": 6,
-    "highlightReason": "The Effect now depends on primitive values instead of an options object recreated during rendering.",
-    "takeaway": "Restructure the Effect so its dependency list reflects the reactive values that genuinely control synchronization.",
-    "professionalNote": "Do not remove required dependencies merely to suppress reruns; change the surrounding code so the dependency is unnecessary."
+    "title": "Seek from the last row",
+    "intro": "Use a deterministic ordering and carry every ordering column in the cursor predicate.",
+    "language": "sql",
+    "code": "SELECT id, created_at, total\nFROM orders\nWHERE (created_at, id) < ($1, $2)\nORDER BY created_at DESC, id DESC\nLIMIT 50;",
+    "highlightLine": 3,
+    "highlightReason": "The row comparison continues strictly after the previous page's final ordering tuple instead of skipping a numeric position.",
+    "takeaway": "A tie-breaker such as id makes the ordering unique and prevents equal timestamps from creating an ambiguous boundary.",
+    "professionalNote": "Cursor columns should have well-defined null handling, and the supporting index should match the filtering and ordering strategy."
   },
   "production": {
-    "title": "Unexpected reconnects after harmless UI updates",
-    "scenario": "A websocket Effect depends on a render-created options object. Typing into unrelated local state re-renders the component, producing a new options reference and reconnecting the socket.",
+    "title": "Choose for the access pattern",
+    "scenario": "An orders API serves both an admin screen that jumps to page numbers and an infinite-scroll activity feed with millions of rows and frequent inserts.",
     "problems": [
-      "Cleanup closes a healthy connection and setup opens another even though serverUrl and roomId are unchanged.",
-      "Extra reconnects can obscure the trigger because the object contents look identical in logs."
+      "Large offsets can require PostgreSQL to compute and discard many preceding rows before returning the requested page.",
+      "Concurrent inserts or deletes can shift positional pages, so separate offset requests may skip or repeat rows."
     ],
-    "professionalApproach": "Inspect dependencies across consecutive renders. Use Object.is to identify the changing value, then remove unnecessary object creation from the dependency boundary rather than disabling exhaustive-deps.",
+    "professionalApproach": "Keep offset pagination where arbitrary page navigation matters and result sizes are controlled. Prefer keyset pagination for sequential feeds, with a unique deterministic order, opaque cursor, and an index validated using the actual query plan.",
     "flow": [
-      "UI state changes",
-      "component renders",
-      "new options",
-      "effect reruns",
-      "socket reconnects"
+      "access pattern",
+      "choose strategy",
+      "define order",
+      "verify index",
+      "measure plan"
     ],
-    "debugClue": "Logged option fields are unchanged, but Object.is(previousOptions, currentOptions) returns false across renders."
+    "debugClue": "EXPLAIN ANALYZE shows high-offset requests processing many rows before a small LIMIT result is returned."
   },
   "interview": {
-    "question": "Why can a React Effect rerun when an object dependency appears to contain exactly the same values?",
-    "answer": "React compares Effect dependencies with their previous values using Object.is. Two separately created objects are different references, even if their properties match, so React treats that dependency as changed. I usually remove unnecessary object dependencies by creating the object inside the Effect and depending on the primitive reactive values it actually uses.",
+    "question": "When would you choose keyset pagination over LIMIT/OFFSET for a production REST endpoint?",
+    "answer": "I prefer keyset pagination for large, sequential result sets where users move forward or backward rather than jump to page 500. It continues from a deterministic sort key, so it avoids large OFFSET work and is less sensitive to positional shifts. OFFSET remains simpler when arbitrary page numbers are a real requirement. Neither approach gives snapshot consistency across separate requests by itself.",
     "remember": [
-      "Dependencies use Object.is",
-      "New object, new identity",
-      "Restructure before memoizing"
+      "Offset uses position",
+      "Keyset uses sort keys",
+      "Ordering must be unique"
     ],
-    "tomorrow": "Choosing offset versus keyset pagination for REST APIs",
-    "interviewerTesting": "Whether you can connect render-time identity, Effect dependency comparison, and production debugging without suppressing correct dependency tracking."
+    "tomorrow": "Diagnosing duplicate POST effects after client retries",
+    "interviewerTesting": "Whether you can connect API navigation requirements, database execution cost, ordering correctness, and concurrent data changes."
   }
 }
