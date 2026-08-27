@@ -43,5 +43,10 @@
     "date": "2026-08-26",
     "topic": "Diagnosing React effects that rerun because object dependencies change identity",
     "category": "Wednesday — Professional Engineering"
+  },
+  {
+    "date": "2026-08-27",
+    "topic": "Choosing offset versus keyset pagination for REST APIs",
+    "category": "Thursday — Engineering Judgement"
   }
 ]
