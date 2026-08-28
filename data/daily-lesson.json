@@ -1,71 +1,71 @@
 {
-  "date": "2026-08-27",
-  "topic": "Choosing offset versus keyset pagination for REST APIs",
-  "tomorrowTopic": "Diagnosing duplicate POST effects after client retries",
-  "category": "Thursday — Engineering Judgement",
+  "date": "2026-08-28",
+  "topic": "Preventing duplicate POST creation with idempotency keys",
+  "tomorrowTopic": "Testing concurrent idempotent POST retries with Testcontainers",
+  "category": "Friday — Interview Challenge",
   "hook": {
-    "headline": "Pagination is a consistency trade-off",
-    "hook": "OFFSET is simple and page-oriented; keyset pagination trades random page jumps for efficient, stable traversal by sort key.",
-    "heroToken": "OFFSET vs CURSOR",
-    "visualCaption": "Offset locates rows by position; keyset locates the next page relative to the last sort key.",
-    "microExample": "page 500 → skip rows | cursor → continue after key"
+    "headline": "A timeout can hide a successful POST",
+    "hook": "If the client retries after losing the response, the server may receive the same creation intent twice. Make that intent identifiable.",
+    "heroToken": "IDEMPOTENCY KEY",
+    "visualCaption": "Same client intent plus same key should resolve to one committed business outcome.",
+    "microExample": "POST times out → retry same key → return original outcome"
   },
   "mentalModel": {
-    "title": "Position versus continuation key",
-    "coreIdea": "Offset pagination asks the database to skip a position in an ordered result. Keyset pagination carries the last row's unique ordering values forward and filters relative to them, avoiding work proportional to a large offset when the query can use a suitable index.",
+    "title": "Deduplicate intent, not transport",
+    "coreIdea": "POST is not idempotent by HTTP method semantics. An API can add application-level idempotency by binding a client-supplied key to one request intent and storing the resulting outcome durably.",
     "primaryFlow": [
-      "page number",
-      "OFFSET N",
-      "skip rows",
-      "return page"
+      "new key",
+      "claim key",
+      "create resource",
+      "store outcome"
     ],
     "secondaryFlow": [
-      "cursor",
-      "seek predicate",
-      "ordered rows",
-      "next cursor"
+      "same key",
+      "find prior outcome",
+      "verify intent",
+      "replay response"
     ],
-    "primaryLabel": "Offset",
-    "secondaryLabel": "Keyset",
-    "keyOutcome": "Choose based on navigation needs, ordering guarantees, data churn, and the query plan—not API fashion.",
-    "mentalShortcut": "position → OFFSET | last key → seek → continue"
+    "primaryLabel": "First attempt",
+    "secondaryLabel": "Retry",
+    "keyOutcome": "Retries become safe only when duplicate requests converge on the same durable business result.",
+    "mentalShortcut": "same intent + same key → same outcome"
   },
   "code": {
-    "title": "Seek from the last row",
-    "intro": "Use a deterministic ordering and carry every ordering column in the cursor predicate.",
+    "title": "Make duplicate keys impossible",
+    "intro": "Persist the key with tenant or client scope and let PostgreSQL enforce uniqueness under concurrency.",
     "language": "sql",
-    "code": "SELECT id, created_at, total\nFROM orders\nWHERE (created_at, id) < ($1, $2)\nORDER BY created_at DESC, id DESC\nLIMIT 50;",
-    "highlightLine": 3,
-    "highlightReason": "The row comparison continues strictly after the previous page's final ordering tuple instead of skipping a numeric position.",
-    "takeaway": "A tie-breaker such as id makes the ordering unique and prevents equal timestamps from creating an ambiguous boundary.",
-    "professionalNote": "Cursor columns should have well-defined null handling, and the supporting index should match the filtering and ordering strategy."
+    "code": "CREATE TABLE idempotency_record (\n  client_id bigint NOT NULL,\n  idem_key text NOT NULL,\n  request_hash text NOT NULL,\n  response_body jsonb,\n  PRIMARY KEY (client_id, idem_key)\n);",
+    "highlightLine": 6,
+    "highlightReason": "The composite primary key makes concurrent claims for the same client and idempotency key mutually exclusive at the database constraint level.",
+    "takeaway": "A pre-check such as SELECT then INSERT is not sufficient by itself because two requests can both observe absence before either inserts.",
+    "professionalNote": "Store enough request identity to reject accidental key reuse with different payload semantics, and define retention and response-replay rules explicitly."
   },
   "production": {
-    "title": "Choose for the access pattern",
-    "scenario": "An orders API serves both an admin screen that jumps to page numbers and an infinite-scroll activity feed with millions of rows and frequent inserts.",
+    "title": "Design the whole retry path",
+    "scenario": "A checkout POST commits an order, but the connection drops before the client receives the 201 response. The client retries automatically with the same application-level idempotency key.",
     "problems": [
-      "Large offsets can require PostgreSQL to compute and discard many preceding rows before returning the requested page.",
-      "Concurrent inserts or deletes can shift positional pages, so separate offset requests may skip or repeat rows."
+      "Without deduplication, both requests can create separate orders even though the user intended one purchase.",
+      "A cache-only key can disappear or diverge from the committed database state unless its consistency model is deliberately designed."
     ],
-    "professionalApproach": "Keep offset pagination where arbitrary page navigation matters and result sizes are controlled. Prefer keyset pagination for sequential feeds, with a unique deterministic order, opaque cursor, and an index validated using the actual query plan.",
+    "professionalApproach": "Scope the key, enforce uniqueness in durable storage, bind it to the request intent, and coordinate the idempotency record with the business write so a committed outcome can be replayed. Treat retries with the same key but different intent as a conflict rather than silently accepting them.",
     "flow": [
-      "access pattern",
-      "choose strategy",
-      "define order",
-      "verify index",
-      "measure plan"
+      "receive key",
+      "validate intent",
+      "claim uniquely",
+      "commit outcome",
+      "replay on retry"
     ],
-    "debugClue": "EXPLAIN ANALYZE shows high-offset requests processing many rows before a small LIMIT result is returned."
+    "debugClue": "Two resources share the same client operation context, while request logs show a timeout followed by a retry of the same creation call."
   },
   "interview": {
-    "question": "When would you choose keyset pagination over LIMIT/OFFSET for a production REST endpoint?",
-    "answer": "I prefer keyset pagination for large, sequential result sets where users move forward or backward rather than jump to page 500. It continues from a deterministic sort key, so it avoids large OFFSET work and is less sensitive to positional shifts. OFFSET remains simpler when arbitrary page numbers are a real requirement. Neither approach gives snapshot consistency across separate requests by itself.",
+    "question": "A client times out after POST /orders and retries. How would you prevent duplicate orders?",
+    "answer": "I would not assume POST is idempotent. I would require an application-level idempotency key for retryable creation requests, scope it to the caller, persist it with a database uniqueness constraint, and associate it with the request intent and committed result. A retry with the same key can then return the stored outcome; the same key with materially different input should be rejected. The database constraint matters because a check-then-insert sequence alone races under concurrent requests.",
     "remember": [
-      "Offset uses position",
-      "Keyset uses sort keys",
-      "Ordering must be unique"
+      "POST is not inherently idempotent",
+      "Uniqueness closes the concurrency race",
+      "Same key must represent the same intent"
     ],
-    "tomorrow": "Diagnosing duplicate POST effects after client retries",
-    "interviewerTesting": "Whether you can connect API navigation requirements, database execution cost, ordering correctness, and concurrent data changes."
+    "tomorrow": "Testing concurrent idempotent POST retries with Testcontainers",
+    "interviewerTesting": "Whether you can connect HTTP semantics, retry failure modes, concurrency control, durable storage, and transactional consistency without relying on a fragile pre-check."
   }
 }
