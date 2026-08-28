@@ -48,5 +48,10 @@
     "date": "2026-08-27",
     "topic": "Choosing offset versus keyset pagination for REST APIs",
     "category": "Thursday — Engineering Judgement"
+  },
+  {
+    "date": "2026-08-28",
+    "topic": "Preventing duplicate POST creation with idempotency keys",
+    "category": "Friday — Interview Challenge"
   }
 ]
