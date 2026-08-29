@@ -53,5 +53,10 @@
     "date": "2026-08-28",
     "topic": "Preventing duplicate POST creation with idempotency keys",
     "category": "Friday — Interview Challenge"
+  },
+  {
+    "date": "2026-08-29",
+    "topic": "Testing concurrent idempotent POST retries with Testcontainers",
+    "category": "Saturday — Practical Engineering"
   }
 ]
