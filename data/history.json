@@ -58,5 +58,10 @@
     "date": "2026-08-29",
     "topic": "Testing concurrent idempotent POST retries with Testcontainers",
     "category": "Saturday — Practical Engineering"
+  },
+  {
+    "date": "2026-08-30",
+    "topic": "Why database uniqueness is the final guard for idempotent request races",
+    "category": "Sunday — Weekly Consolidation"
   }
 ]
