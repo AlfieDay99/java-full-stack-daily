@@ -1,71 +1,71 @@
 {
-  "date": "2026-08-29",
-  "topic": "Testing concurrent idempotent POST retries with Testcontainers",
-  "tomorrowTopic": "Consolidating idempotency, retries, and database constraints",
-  "category": "Saturday — Practical Engineering",
+  "date": "2026-08-30",
+  "topic": "Why database uniqueness is the final guard for idempotent request races",
+  "tomorrowTopic": "Java records as immutable API boundary types",
+  "category": "Sunday — Weekly Consolidation",
   "hook": {
-    "headline": "Sequential retry tests miss the race",
-    "hook": "An idempotency design can pass one-request-at-a-time tests and still fail when two identical POSTs reach PostgreSQL concurrently.",
-    "heroToken": "CONCURRENT RETRY",
-    "visualCaption": "Two callers, one idempotency key, one committed business outcome.",
-    "microExample": "POST A + POST B → same key → one order"
+    "headline": "Idempotency needs a durable invariant",
+    "hook": "Application checks can coordinate retries, but only a database constraint can make duplicate key ownership impossible at the storage boundary.",
+    "heroToken": "UNIQUE KEY",
+    "visualCaption": "Many retries may arrive; one idempotency key may own one durable outcome.",
+    "microExample": "same key × 2 → UNIQUE constraint → one winner"
   },
   "mentalModel": {
-    "title": "Test the collision, not just the happy path",
-    "coreIdea": "A useful concurrency integration test releases two requests with the same idempotency key together against real PostgreSQL, then verifies that the durable uniqueness rule collapses them to one business outcome.",
+    "title": "Coordinate in code, enforce in data",
+    "coreIdea": "An idempotency flow is strongest when application logic decides how to replay or reject a retry while PostgreSQL enforces that only one row can claim the idempotency key within the chosen scope.",
     "primaryFlow": [
-      "start PostgreSQL",
-      "prepare same key",
-      "release two callers",
-      "await both results"
+      "receive POST",
+      "derive key scope",
+      "attempt key claim",
+      "create resource",
+      "store outcome"
     ],
     "secondaryFlow": [
-      "query durable state",
-      "count key rows",
-      "count business rows",
-      "compare outcomes"
+      "duplicate arrives",
+      "unique claim conflicts",
+      "load stored outcome",
+      "return contract result"
     ],
-    "primaryLabel": "Concurrent exercise",
-    "secondaryLabel": "Post-condition",
-    "keyOutcome": "The test proves both externally visible retry behavior and the database invariant that protects it under contention.",
-    "mentalShortcut": "same key + same race → one durable outcome"
+    "primaryLabel": "First request",
+    "secondaryLabel": "Concurrent retry",
+    "keyOutcome": "Correctness comes from the combination: application semantics define retry behavior; the database protects the single-owner invariant under races.",
+    "mentalShortcut": "code chooses behavior; constraint protects ownership"
   },
   "code": {
-    "title": "Release both callers together",
-    "intro": "Use separate worker threads so two requests can contend for the same key against the Testcontainers PostgreSQL instance.",
-    "language": "java",
-    "code": "var pool = Executors.newFixedThreadPool(2);\nvar gate = new CountDownLatch(1);\nvar a = pool.submit(() -> { gate.await(); return client.post(key); });\nvar b = pool.submit(() -> { gate.await(); return client.post(key); });\ngate.countDown();\nassertEquals(a.get().orderId(), b.get().orderId());\nassertEquals(1, repository.countByKey(key));\npool.shutdown();",
-    "highlightLine": 5,
-    "highlightReason": "Both tasks are already waiting before the latch opens, increasing the chance that the requests overlap at the database boundary instead of running sequentially.",
-    "takeaway": "A concurrency test should assert the final durable invariant, not merely that both calls returned successfully.",
-    "professionalNote": "Avoid wrapping this test in a test-managed @Transactional transaction when worker threads must observe committed state; Spring binds test transaction state to the test thread, not arbitrary executor threads."
+    "title": "Make key ownership explicit",
+    "intro": "Model the invariant in PostgreSQL instead of relying on a prior existence check that can race.",
+    "language": "sql",
+    "code": "CREATE TABLE idempotency_record (\n  client_id bigint NOT NULL,\n  idem_key text NOT NULL,\n  resource_id bigint,\n  response_status integer,\n  UNIQUE (client_id, idem_key)\n);",
+    "highlightLine": 6,
+    "highlightReason": "The composite unique constraint defines the durable ownership rule and lets PostgreSQL arbitrate concurrent claims for the same scoped key.",
+    "takeaway": "A read-then-insert check is not itself a concurrency guarantee; the uniqueness rule belongs in the database schema.",
+    "professionalNote": "Choose the constraint scope deliberately. A globally unique key and a per-client unique key express different API contracts, so the schema must match the idempotency-key semantics you expose."
   },
   "production": {
-    "title": "Make the race reproducible",
-    "scenario": "A payment-facing API uses an idempotency table with a PostgreSQL unique key. You need confidence that two near-simultaneous retries cannot create two orders.",
+    "title": "Separate invariant from retry policy",
+    "scenario": "Two identical POST requests with the same idempotency key reach different application instances at nearly the same time.",
     "problems": [
-      "A sequential integration test never exercises competing inserts for the same unique key.",
-      "Mocked repositories cannot prove PostgreSQL constraint behavior or transaction visibility under real contention."
+      "Both instances can observe that no key row exists before either insert commits.",
+      "Without a uniqueness invariant, both requests may proceed to create separate business resources."
     ],
-    "professionalApproach": "Run the application against a disposable PostgreSQL Testcontainer, start two callers behind a coordination gate, use the same idempotency key and request intent, wait for both calls to finish, then query committed state. Assert one idempotency record, one business resource, and equivalent client-visible outcomes according to the API contract.",
+    "professionalApproach": "Let both requests attempt the same constrained key claim inside an appropriate transaction boundary. Treat the database-enforced duplicate claim as a concurrency outcome, then load or wait for the canonical stored result according to your API design. Keep the business write and idempotency state coordinated so the recorded outcome cannot point to a resource that was never committed.",
     "flow": [
-      "boot container",
-      "seed prerequisites",
-      "release race",
-      "await completion",
-      "assert durable state"
+      "race begins",
+      "constraint arbitrates",
+      "winner commits outcome",
+      "retry resolves canonical result"
     ],
-    "debugClue": "If the test intermittently creates two business rows, inspect whether uniqueness covers the correct key scope and whether the idempotency record and business write are coordinated transactionally."
+    "debugClue": "If duplicate resources exist despite idempotency keys, inspect the actual unique constraint, its scope, and whether resource creation can commit independently of the idempotency record."
   },
   "interview": {
-    "question": "How would you test that an idempotency-key implementation is safe under concurrent retries?",
-    "answer": "I would use an integration test against real PostgreSQL rather than only mocks. Two worker threads would issue the same request with the same idempotency key after a shared gate opens. After both complete, I would assert the API's expected outcomes and query committed database state to prove there is exactly one idempotency record and one business resource. I would also avoid relying on a test-managed transaction across those worker threads because Spring's test transaction context is thread-bound.",
+    "question": "Why is a database unique constraint still necessary if the service checks whether an idempotency key already exists?",
+    "answer": "Because the existence check and insert are separate operations unless protected by a stronger concurrency mechanism. Two requests can both observe absence and then both try to claim the key. A PostgreSQL unique constraint makes the single-owner rule durable and lets the database reject one competing claim. The service still owns the API semantics: it decides how to translate that concurrency outcome into replaying the stored result, waiting, or returning another documented response.",
     "remember": [
-      "Release competing requests together",
-      "Assert committed database invariants",
-      "Do not assume test transactions cross threads"
+      "Existence checks can race",
+      "Uniqueness protects key ownership",
+      "Application code defines retry semantics"
     ],
-    "tomorrow": "Consolidating idempotency, retries, and database constraints",
-    "interviewerTesting": "Whether you can design a realistic concurrency test that distinguishes application behavior, Spring test transaction scope, and PostgreSQL-enforced invariants."
+    "tomorrow": "Java records as immutable API boundary types",
+    "interviewerTesting": "Whether you can separate application-level idempotency semantics from the database invariant that makes concurrent duplicate creation impossible for the constrained key scope."
   }
 }
