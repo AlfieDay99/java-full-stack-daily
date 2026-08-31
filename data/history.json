@@ -63,5 +63,10 @@
     "date": "2026-08-30",
     "topic": "Why database uniqueness is the final guard for idempotent request races",
     "category": "Sunday — Weekly Consolidation"
+  },
+  {
+    "date": "2026-08-31",
+    "topic": "Java records: shallow immutability at API boundaries",
+    "category": "Monday — Fundamentals"
   }
 ]
