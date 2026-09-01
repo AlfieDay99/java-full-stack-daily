@@ -68,5 +68,10 @@
     "date": "2026-08-31",
     "topic": "Java records: shallow immutability at API boundaries",
     "category": "Monday — Fundamentals"
+  },
+  {
+    "date": "2026-09-01",
+    "topic": "Spring request validation: DTO constraints versus business invariants",
+    "category": "Tuesday — Core Working Knowledge"
   }
 ]
