@@ -44,12 +44,20 @@ function requireStringArray(
   label = key
 ): string[] {
   const value = parent[key];
-  if (!Array.isArray(value) || value.length < min || value.length > max) {
-    throw new Error(`Expected ${label} to contain ${min}–${max} items.`);
+  if (!Array.isArray(value) || value.length < min) {
+    throw new Error(`Expected ${label} to contain at least ${min} item${min === 1 ? "" : "s"}.`);
   }
   if (!value.every((item) => typeof item === "string" && item.trim())) {
     throw new Error(`Expected every item in ${label} to be a non-empty string.`);
   }
+
+  if (value.length > max) {
+    console.warn(`[JFSD] ${label} contains ${value.length} items; using the first ${max}.`);
+    const trimmed = value.slice(0, max) as string[];
+    parent[key] = trimmed;
+    return trimmed;
+  }
+
   return value as string[];
 }
 
