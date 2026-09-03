@@ -73,5 +73,10 @@
     "date": "2026-09-01",
     "topic": "Spring request validation: DTO constraints versus business invariants",
     "category": "Tuesday — Core Working Knowledge"
+  },
+  {
+    "date": "2026-09-03",
+    "topic": "Designing stable ProblemDetail types instead of parsing error messages",
+    "category": "Thursday — Engineering Judgement"
   }
 ]
