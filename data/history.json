@@ -78,5 +78,10 @@
     "date": "2026-09-03",
     "topic": "Designing stable ProblemDetail types instead of parsing error messages",
     "category": "Thursday — Engineering Judgement"
+  },
+  {
+    "date": "2026-09-04",
+    "topic": "Keeping domain failures HTTP-agnostic with Spring MVC exception mapping",
+    "category": "Friday — Interview Challenge"
   }
 ]
