@@ -83,5 +83,10 @@
     "date": "2026-09-04",
     "topic": "Keeping domain failures HTTP-agnostic with Spring MVC exception mapping",
     "category": "Friday — Interview Challenge"
+  },
+  {
+    "date": "2026-09-05",
+    "topic": "Testing domain-to-HTTP exception mappings with MockMvc",
+    "category": "Saturday — Practical Engineering"
   }
 ]
